@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1021098978863",
+    "project_id": "cellconnect-4530f",
+    "storage_bucket": "cellconnect-4530f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1021098978863:android:f74a969200c42b5e7020da",
+        "android_client_info": {
+          "package_name": "com.example.cellconnect"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBaaCeNN9wjPg9GCrEvsBiCamG1qlwFIQQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
