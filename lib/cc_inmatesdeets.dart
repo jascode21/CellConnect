@@ -75,105 +75,246 @@ class _InmateDetailsPageState extends State<InmateDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const SizedBox(height: 70),
-              const Text(
-                'Inmate Details',
-                style: TextStyle(
-                  fontSize: 50,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'Inter',
-                ),
-              ),
-              const SizedBox(height: 30),
-              TextFormField(
-                controller: _inmateFirstNameController,
-                decoration: const InputDecoration(
-                  labelText: 'Inmate First Name',
-                  labelStyle: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 20,
-                    color: Color.fromARGB(255, 5, 77, 136),
-                  ),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter inmate first name';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _inmateLastNameController,
-                decoration: const InputDecoration(
-                  labelText: 'Inmate Last Name',
-                  labelStyle: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 20,
-                    color: Color.fromARGB(255, 5, 77, 136),
-                  ),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter inmate last name';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _relationshipController,
-                decoration: const InputDecoration(
-                  labelText: 'Your Relationship to Inmate',
-                  labelStyle: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 20,
-                    color: Color.fromARGB(255, 5, 77, 136),
-                  ),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter your relationship';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 40),
-              Center(
-                child: _isLoading
-                    ? const CircularProgressIndicator()
-                    : ElevatedButton(
-                        onPressed: () => _proceedToVerification(context),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color.fromARGB(255, 5, 77, 136),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 50, vertical: 15),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(30.0),
-                          ),
-                        ),
-                        child: const Text(
-                          'Verify Identity',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Colors.white,
-                            fontFamily: 'Inter',
-                          ),
+  return Scaffold(
+    body: Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Colors.white, Color(0xFFF5F7FA)],
+        ),
+      ),
+      child: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 20, bottom: 8),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.arrow_back),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Inmate Details',
+                        style: TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'Inter',
+                          color: Color(0xFF054D88),
                         ),
                       ),
-              ),
-            ],
+                    ],
+                  ),
+                ),
+                
+                const SizedBox(height: 16),
+                
+                // Animated container for form
+                TweenAnimationBuilder<double>(
+                  tween: Tween<double>(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 600),
+                  curve: Curves.easeOut,
+                  builder: (context, value, child) {
+                    return Opacity(
+                      opacity: value,
+                      child: Transform.translate(
+                        offset: Offset(0, 20 * (1-value)),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Please provide information about the inmate you wish to visit',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 16,
+                            color: Colors.grey,
+                          ),
+                        ),
+                        
+                        const SizedBox(height: 24),
+                        
+                        // Inmate First Name
+                        const Text(
+                          'Inmate First Name',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF054D88),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: _inmateFirstNameController,
+                          decoration: InputDecoration(
+                            hintText: 'Enter inmate\'s first name',
+                            fillColor: const Color(0xFFF5F7FA),
+                            filled: true,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            prefixIcon: const Icon(Icons.person, color: Color(0xFF054D88)),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please enter inmate first name';
+                            }
+                            return null;
+                          },
+                        ),
+                        
+                        const SizedBox(height: 16),
+                        
+                        // Inmate Last Name
+                        const Text(
+                          'Inmate Last Name',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF054D88),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: _inmateLastNameController,
+                          decoration: InputDecoration(
+                            hintText: 'Enter inmate\'s last name',
+                            fillColor: const Color(0xFFF5F7FA),
+                            filled: true,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            prefixIcon: const Icon(Icons.person, color: Color(0xFF054D88)),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please enter inmate last name';
+                            }
+                            return null;
+                          },
+                        ),
+                        
+                        const SizedBox(height: 16),
+                        
+                        // Relationship
+                        const Text(
+                          'Your Relationship to Inmate',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF054D88),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextFormField(
+                          controller: _relationshipController,
+                          decoration: InputDecoration(
+                            hintText: 'e.g. Family member, Friend, Legal counsel',
+                            fillColor: const Color(0xFFF5F7FA),
+                            filled: true,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                            prefixIcon: const Icon(Icons.people, color: Color(0xFF054D88)),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please enter your relationship';
+                            }
+                            return null;
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                
+                const SizedBox(height: 32),
+                
+                // Submit button
+                Center(
+                  child: _isLoading
+                      ? const CircularProgressIndicator(color: Color(0xFF054D88))
+                      : TweenAnimationBuilder<double>(
+                          tween: Tween<double>(begin: 0.0, end: 1.0),
+                          duration: const Duration(milliseconds: 800),
+                          curve: Curves.elasticOut,
+                          builder: (context, value, child) {
+                            return Transform.scale(
+                              scale: value,
+                              child: child,
+                            );
+                          },
+                          child: SizedBox(
+                            width: double.infinity,
+                            height: 56,
+                            child: ElevatedButton(
+                              onPressed: () => _proceedToVerification(context),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF054D88),
+                                foregroundColor: Colors.white,
+                                elevation: 4,
+                                shadowColor: const Color(0xFF054D88).withOpacity(0.4),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                              child: const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    'Verify Identity',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      fontFamily: 'Inter',
+                                    ),
+                                  ),
+                                  SizedBox(width: 8),
+                                  Icon(Icons.arrow_forward),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                ),
+                
+                const SizedBox(height: 24),
+              ],
+            ),
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 }

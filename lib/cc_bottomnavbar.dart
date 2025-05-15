@@ -10,8 +10,13 @@ import 'cc_database.dart';
 
 class BottomNavBar extends StatefulWidget {
   final String role; // Role to determine navigation (Visitor or Staff)
+  final String userName; // User's name to display
 
-  const BottomNavBar({super.key, required this.role, required String userName});
+  const BottomNavBar({
+    super.key, 
+    required this.role, 
+    required this.userName
+  });
 
   @override
   _BottomNavBarState createState() => _BottomNavBarState();
@@ -29,18 +34,18 @@ class _BottomNavBarState extends State<BottomNavBar> {
 
     // Define pages for Visitor
     _visitorPages = [
-      HomePage(role: '', userName: '',),                   // Visitor Home Page
-      const CalendarPage(events: [],),              // Visitor Calendar Page
-      const NotificationsPage(),        // Visitor Notifications Page
-      const UserProfilePage(),         // Visitor Profile Page
+      HomePage(role: widget.role, userName: widget.userName),
+      const CalendarPage(events: []),
+      const NotificationsPage(),
+      const UserProfilePage(),
     ];
 
     // Define pages for Staff
     _staffPages = [
-      const DashboardPage(),           // Staff Dashboard Page
-      const ManagePage(),              // Staff Manage Page
-      const ActivityLog(),            // Staff Activity Page
-      const DatabasePage(),            // Staff Database Page
+      const DashboardPage(),
+      const ManagePage(),
+      const ActivityLog(),
+      const DatabasePage(),
     ];
   }
 

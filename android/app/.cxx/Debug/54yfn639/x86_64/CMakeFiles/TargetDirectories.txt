@@ -1,0 +1,2 @@
+C:/Users/Aris/OneDrive/Desktop/Cell Connect/cellconnect-new/android/app/.cxx/Debug/54yfn639/x86_64/CMakeFiles/edit_cache.dir
+C:/Users/Aris/OneDrive/Desktop/Cell Connect/cellconnect-new/android/app/.cxx/Debug/54yfn639/x86_64/CMakeFiles/rebuild_cache.dir
