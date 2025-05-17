@@ -661,7 +661,7 @@ class _InPersonVisitPageState extends State<InPersonVisitPage> with SingleTicker
                                 ),
                                 SizedBox(height: 4),
                                 Text(
-                                  'Schedule a visit to the facility',
+                                  'Schedule a face-to-face visit with an inmate at your selected facility',
                                   style: TextStyle(
                                     fontFamily: 'Inter',
                                     fontSize: 14,
@@ -742,22 +742,41 @@ class _InPersonVisitPageState extends State<InPersonVisitPage> with SingleTicker
                                 padding: const EdgeInsets.all(16),
                                 child: Column(
                                   children: _facilities.map((facility) => 
-                                    RadioListTile<String>(
-                                      title: Text(
-                                        facility,
-                                        style: const TextStyle(
-                                          fontFamily: 'Inter',
-                                          fontSize: 16,
+                                    Column(
+                                      children: [
+                                        RadioListTile<String>(
+                                          title: Text(
+                                            facility,
+                                            style: const TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: 16,
+                                            ),
+                                          ),
+                                          value: facility,
+                                          groupValue: selectedFacility,
+                                          activeColor: const Color(0xFF054D88),
+                                          onChanged: (value) {
+                                            setState(() => selectedFacility = value);
+                                            HapticFeedback.selectionClick();
+                                          },
+                                          contentPadding: EdgeInsets.zero,
                                         ),
-                                      ),
-                                      value: facility,
-                                      groupValue: selectedFacility,
-                                      activeColor: const Color(0xFF054D88),
-                                      onChanged: (value) {
-                                        setState(() => selectedFacility = value);
-                                        HapticFeedback.selectionClick();
-                                      },
-                                      contentPadding: EdgeInsets.zero,
+                                        Padding(
+                                          padding: const EdgeInsets.only(left: 30, bottom: 8),
+                                          child: Text(
+                                            facility == 'Sta. Cruz Police Station 3' 
+                                                ? 'Available daily, 8AM-6PM'
+                                                : facility == 'Gandara Police Community Precinct'
+                                                    ? 'Available weekdays, 9AM-5PM'
+                                                    : 'Available all days, 8AM-7PM',
+                                            style: const TextStyle(
+                                              fontFamily: 'Inter',
+                                              fontSize: 12,
+                                              color: Colors.grey,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ).toList(),
                                 ),
@@ -863,6 +882,25 @@ class _InPersonVisitPageState extends State<InPersonVisitPage> with SingleTicker
                                 ),
                               ),
                 
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.info_outline, size: 16, color: Colors.grey.shade600),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Select a date for your visit. Weekends may have different available hours.',
+                                        style: TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: 12,
+                                          color: Colors.grey.shade600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                               // Calendar grid
                               GridView.count(
                                 shrinkWrap: true,
@@ -969,6 +1007,23 @@ class _InPersonVisitPageState extends State<InPersonVisitPage> with SingleTicker
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
+                                      Row(
+                                        children: [
+                                          Icon(Icons.info_outline, size: 16, color: Colors.grey.shade600),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              'Each visit lasts for 1 hour. Please arrive 15 minutes before your scheduled time.',
+                                              style: TextStyle(
+                                                fontFamily: 'Inter',
+                                                fontSize: 12,
+                                                color: Colors.grey.shade600,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 16),
                                       Text(
                                         'Available time slots for ${DateFormat('MMMM d, yyyy').format(selectedDate!)}:',
                                         style: const TextStyle(
@@ -1194,6 +1249,16 @@ class VisitScheduledScreen extends StatelessWidget {
                           color: Colors.black87,
                         ),
                       ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'Staff will review your request and you will be notified when it\'s approved or if there are any issues.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 14,
+                          color: Colors.grey,
+                        ),
+                      ),
                       const SizedBox(height: 24),
                       _buildDetailRow('Facility:', facility),
                       _buildDetailRow('Date:', DateFormat('MMMM d, y').format(date)),
@@ -1217,6 +1282,31 @@ class VisitScheduledScreen extends StatelessWidget {
                                   fontFamily: 'Inter',
                                   fontSize: 14,
                                   color: Colors.orange,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                        ),
+                        child: const Row(
+                          children: [
+                            Icon(Icons.badge, color: Colors.blue, size: 20),
+                            SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Remember to bring a valid government-issued ID for verification.',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 14,
+                                  color: Colors.blue,
                                 ),
                               ),
                             ),
