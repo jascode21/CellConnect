@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:random_string/random_string.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:mailer/mailer.dart';
+import 'package:mailer/smtp_server.dart';
 import 'cc_inmatesdeets.dart';
 import 'cc_bottomnavbar.dart';
 
@@ -251,6 +253,38 @@ class _VerifyEmailPageState extends State<VerifyEmailPage> with SingleTickerProv
     }
   }
 
+  Future<void> _sendVerificationEmail(String email, String code) async {
+    // Replace with your Gmail credentials or use environment variables
+    final String username = 'arc.codecraft@gmail.com'; // Replace with your Gmail address
+    final String password = 'zupj rqpc pubb intx'; // Replace with your Gmail App Password
+
+    // Configure SMTP server (Gmail)
+    final smtpServer = gmail(username, password);
+
+    // Create the email message
+    final message = Message()
+      ..from = Address(username, 'CellConnect')
+      ..recipients.add(email)
+      ..subject = 'Your CellConnect Verification Code'
+      ..text = 'Your verification code is: $code\n\nPlease enter this code to verify your email address.'
+      ..html = '''
+        <h2>CellConnect Email Verification</h2>
+        <p>Your verification code is:</p>
+        <h3>$code</h3>
+        <p>Please enter this code in the CellConnect app to verify your email address.</p>
+        <p>If you did not request this code, please ignore this email.</p>
+      ''';
+
+    try {
+      // Send the email
+      final sendReport = await send(message, smtpServer);
+      print('Verification email sent: ${sendReport.toString()}');
+    } catch (e) {
+      print('Error sending verification email: $e');
+      throw Exception('Failed to send verification email: $e');
+    }
+  }
+
   Future<void> _resendCode() async {
     setState(() => _isResending = true);
     
@@ -287,11 +321,6 @@ class _VerifyEmailPageState extends State<VerifyEmailPage> with SingleTickerProv
         setState(() => _isResending = false);
       }
     }
-  }
-
-  Future<void> _sendVerificationEmail(String email, String code) async {
-    // Simulate network delay
-    await Future.delayed(const Duration(milliseconds: 800));
   }
 
   @override

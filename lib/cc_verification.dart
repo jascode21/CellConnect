@@ -2,6 +2,9 @@ import 'package:cellconnect/cc_homepage.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:file_picker/file_picker.dart';
+import 'dart:io';
+import 'dart:convert'; // For base64 encoding
 
 class VerificationPage extends StatefulWidget {
   final String email;
@@ -32,6 +35,8 @@ class VerificationPage extends StatefulWidget {
 class _VerificationPageState extends State<VerificationPage> with SingleTickerProviderStateMixin {
   String? _selectedIdType;
   bool _isVerifying = false;
+  File? _selectedFile;
+  String? _fileName;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
@@ -40,7 +45,6 @@ class _VerificationPageState extends State<VerificationPage> with SingleTickerPr
   void initState() {
     super.initState();
     
-    // Setup animations
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
@@ -63,6 +67,47 @@ class _VerificationPageState extends State<VerificationPage> with SingleTickerPr
     super.dispose();
   }
 
+  Future<void> _pickFile() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['jpg', 'jpeg', 'png', 'pdf'],
+      );
+
+      if (result != null && result.files.single.path != null) {
+        final file = File(result.files.single.path!);
+        final fileSizeInBytes = await file.length();
+        const maxSizeInBytes = 900 * 1024; // 900KB limit to stay under 1MB with overhead
+        if (fileSizeInBytes > maxSizeInBytes) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('File size exceeds 900KB limit'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+        setState(() {
+          _selectedFile = file;
+          _fileName = result.files.single.name;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error selecting file: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<String> _convertFileToBase64(File file) async {
+    final bytes = await file.readAsBytes();
+    return base64Encode(bytes);
+  }
+
   Future<void> _completeRegistration(BuildContext context) async {
     if (_selectedIdType == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -74,17 +119,41 @@ class _VerificationPageState extends State<VerificationPage> with SingleTickerPr
       return;
     }
 
+    if (_selectedFile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please upload an ID file'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     if (_isVerifying) return;
     setState(() => _isVerifying = true);
 
     try {
-      // Get current user
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         throw Exception('No authenticated user found');
       }
 
-      // Save all data to Firestore using the UID
+      // Convert file to Base64
+      final base64File = await _convertFileToBase64(_selectedFile!);
+      print('File converted to Base64, length: ${base64File.length}');
+
+      // Save to Firestore
+      final idFileRef = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('idFiles')
+          .add({
+        'fileName': _fileName,
+        'fileContent': base64File,
+        'uploadedAt': FieldValue.serverTimestamp(),
+      });
+
+      // Update user document with reference to idFile
       await FirebaseFirestore.instance
           .collection('users')
           .doc(user.uid)
@@ -94,6 +163,7 @@ class _VerificationPageState extends State<VerificationPage> with SingleTickerPr
         'email': widget.email,
         'role': widget.role,
         'verificationMethod': _selectedIdType,
+        'idFileRef': idFileRef.id, // Store the document ID as a reference
         'verifiedAt': FieldValue.serverTimestamp(),
         'fullName': '${widget.firstName} ${widget.lastName}',
       }, SetOptions(merge: true));
@@ -111,11 +181,7 @@ class _VerificationPageState extends State<VerificationPage> with SingleTickerPr
       });
 
       if (!mounted) return;
-      
-      // Show success animation before navigating
       _showSuccessAnimation();
-      
-      // Navigate to the home page after successful verification
       Future.delayed(const Duration(milliseconds: 1500), () {
         if (!mounted) return;
         Navigator.pushReplacement(
@@ -132,7 +198,7 @@ class _VerificationPageState extends State<VerificationPage> with SingleTickerPr
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Registration failed: ${e.toString()}'),
+          content: Text('Registration failed: $e'),
           backgroundColor: Colors.red,
         ),
       );
@@ -162,7 +228,7 @@ class _VerificationPageState extends State<VerificationPage> with SingleTickerPr
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withAlpha(26), // 0.1 opacity
+                      color: Colors.black.withAlpha(26),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -194,8 +260,8 @@ class _VerificationPageState extends State<VerificationPage> with SingleTickerPr
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
             colors: [
-              const Color(0xFF054D88).withAlpha(204), // 0.8 opacity
-              const Color(0xFF054D88).withAlpha(153), // 0.6 opacity
+              const Color(0xFF054D88).withAlpha(204),
+              const Color(0xFF054D88).withAlpha(153),
               Colors.white,
             ],
             stops: const [0.0, 0.2, 0.5],
@@ -207,7 +273,6 @@ class _VerificationPageState extends State<VerificationPage> with SingleTickerPr
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Back button
                 IconButton(
                   icon: const Icon(Icons.arrow_back, color: Colors.white),
                   onPressed: () => Navigator.pop(context),
@@ -215,7 +280,6 @@ class _VerificationPageState extends State<VerificationPage> with SingleTickerPr
                 
                 SizedBox(height: screenHeight * 0.02),
                 
-                // Verification icon with animation
                 FadeTransition(
                   opacity: _fadeAnimation,
                   child: SlideTransition(
@@ -238,7 +302,7 @@ class _VerificationPageState extends State<VerificationPage> with SingleTickerPr
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: const Color(0xFF054D88).withAlpha(77), // 0.3 opacity
+                                color: const Color(0xFF054D88).withAlpha(77),
                                 blurRadius: 12,
                                 offset: const Offset(0, 6),
                               ),
@@ -257,7 +321,6 @@ class _VerificationPageState extends State<VerificationPage> with SingleTickerPr
                 
                 const SizedBox(height: 24),
                 
-                // Header text with animation
                 FadeTransition(
                   opacity: _fadeAnimation,
                   child: SlideTransition(
@@ -279,7 +342,7 @@ class _VerificationPageState extends State<VerificationPage> with SingleTickerPr
                           'Final step to complete your registration',
                           style: TextStyle(
                             fontSize: 16,
-                            color: Colors.white.withAlpha(230), // 0.9 opacity
+                            color: Colors.white.withAlpha(230),
                           ),
                           textAlign: TextAlign.center,
                         ),
@@ -290,7 +353,6 @@ class _VerificationPageState extends State<VerificationPage> with SingleTickerPr
                 
                 SizedBox(height: screenHeight * 0.05),
                 
-                // ID selection card with animation
                 FadeTransition(
                   opacity: _fadeAnimation,
                   child: SlideTransition(
@@ -302,7 +364,7 @@ class _VerificationPageState extends State<VerificationPage> with SingleTickerPr
                         borderRadius: BorderRadius.circular(20),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withAlpha(26), // 0.1 opacity
+                            color: Colors.black.withAlpha(26),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),
@@ -361,7 +423,6 @@ class _VerificationPageState extends State<VerificationPage> with SingleTickerPr
                           
                           const SizedBox(height: 24),
                           
-                          // ID upload section (simulated)
                           if (_selectedIdType != null) ...[
                             TweenAnimationBuilder<double>(
                               tween: Tween<double>(begin: 0.0, end: 1.0),
@@ -371,7 +432,7 @@ class _VerificationPageState extends State<VerificationPage> with SingleTickerPr
                                 return Opacity(
                                   opacity: value,
                                   child: Transform.translate(
-                                    offset: Offset(0, 20 * (1-value)),
+                                    offset: Offset(0, 20 * (1 - value)),
                                     child: child,
                                   ),
                                 );
@@ -382,7 +443,7 @@ class _VerificationPageState extends State<VerificationPage> with SingleTickerPr
                                   color: const Color(0xFFF5F7FA),
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
-                                    color: const Color(0xFF054D88).withAlpha(77), // 0.3 opacity
+                                    color: const Color(0xFF054D88).withAlpha(77),
                                     style: BorderStyle.solid,
                                   ),
                                 ),
@@ -404,19 +465,19 @@ class _VerificationPageState extends State<VerificationPage> with SingleTickerPr
                                       ),
                                     ),
                                     const SizedBox(height: 4),
-                                    const Text(
-                                      'Tap to browse files or drag and drop',
+                                    Text(
+                                      _fileName ?? 'Tap to browse files or drag and drop',
                                       style: TextStyle(
                                         fontFamily: 'Inter',
                                         fontSize: 14,
-                                        color: Colors.grey,
+                                        color: _fileName != null ? Colors.black : Colors.grey,
                                       ),
                                       textAlign: TextAlign.center,
                                     ),
                                     const SizedBox(height: 8),
                                     TextButton(
-                                      onPressed: () {},
-                                      child: const Text('Browse Files'),
+                                      onPressed: _pickFile,
+                                      child: Text(_fileName != null ? 'Change File' : 'Browse Files'),
                                     ),
                                   ],
                                 ),
@@ -426,12 +487,11 @@ class _VerificationPageState extends State<VerificationPage> with SingleTickerPr
                             const SizedBox(height: 16),
                           ],
                           
-                          // Complete verification button
                           SizedBox(
                             width: double.infinity,
                             height: 56,
                             child: ElevatedButton(
-                              onPressed: _selectedIdType == null || _isVerifying
+                              onPressed: _selectedIdType == null || _selectedFile == null || _isVerifying
                                   ? null
                                   : () => _completeRegistration(context),
                               style: ElevatedButton.styleFrom(
@@ -439,7 +499,7 @@ class _VerificationPageState extends State<VerificationPage> with SingleTickerPr
                                 foregroundColor: Colors.white,
                                 disabledBackgroundColor: Colors.grey.shade300,
                                 elevation: 4,
-                                shadowColor: const Color(0xFF054D88).withAlpha(102), // 0.4 opacity
+                                shadowColor: const Color(0xFF054D88).withAlpha(102),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
                                 ),
@@ -479,7 +539,7 @@ class _VerificationPageState extends State<VerificationPage> with SingleTickerPr
                                         Container(
                                           padding: const EdgeInsets.all(8),
                                           decoration: BoxDecoration(
-                                            color: Colors.white.withAlpha(51), // 0.2 opacity
+                                            color: Colors.white.withAlpha(51),
                                             shape: BoxShape.circle,
                                           ),
                                           child: const Icon(Icons.arrow_forward, color: Colors.white),
@@ -496,7 +556,6 @@ class _VerificationPageState extends State<VerificationPage> with SingleTickerPr
                 
                 const SizedBox(height: 24),
                 
-                // Privacy note with animation
                 FadeTransition(
                   opacity: _fadeAnimation,
                   child: Center(

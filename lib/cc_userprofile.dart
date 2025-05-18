@@ -1150,7 +1150,7 @@ class _UserProfilePageState extends State<UserProfilePage> with SingleTickerProv
                         Hero(
                           tag: 'profileImage',
                           child: GestureDetector(
-                            onTap: _isUploading ? null : _pickAndUploadImage,
+                            onTap: null, // Disable tap to prevent bottom sheet
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 300),
                               width: 120,
@@ -1207,7 +1207,7 @@ class _UserProfilePageState extends State<UserProfilePage> with SingleTickerProv
                                         ),
                                       ),
                                     ),
-                                  // Camera icon overlay
+                                  // Camera icon overlay - now visible but non-interactive due to onTap: null
                                   Positioned(
                                     bottom: 0,
                                     right: 0,
@@ -1239,59 +1239,54 @@ class _UserProfilePageState extends State<UserProfilePage> with SingleTickerProv
                         const SizedBox(height: 16),
                         
                         // User's Name with edit functionality
-                        if (_isEditMode)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 40),
-                            child: TextField(
-                              controller: _nameController,
-                              textAlign: TextAlign.center,
+                       if (_isEditMode)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 40),
+                        child: TextField(
+                          controller: _nameController,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF054D88),
+                          ),
+                          decoration: InputDecoration(
+                            hintText: 'Enter your name',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                          ),
+                        ),
+                      )
+                    else
+                      GestureDetector(
+                        onTap: null, // Disable tap to prevent entering edit mode
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              fullName.isNotEmpty ? fullName : 'User',
                               style: const TextStyle(
                                 fontFamily: 'Inter',
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
                                 color: Color(0xFF054D88),
                               ),
-                              decoration: InputDecoration(
-                                hintText: 'Enter your name',
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 12,
-                                ),
-                              ),
                             ),
-                          )
-                        else
-                          GestureDetector(
-                            onTap: () {
-                              setState(() {
-                                _isEditMode = true;
-                              });
-                              HapticFeedback.lightImpact();
-                            },
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  fullName.isNotEmpty ? fullName : 'User',
-                                  style: const TextStyle(
-                                    fontFamily: 'Inter',
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF054D88),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                const Icon(
-                                  Icons.edit,
-                                  size: 16,
-                                  color: Color(0xFF054D88),
-                                ),
-                              ],
+                            const SizedBox(width: 8),
+                            const Icon(
+                              Icons.edit,
+                              size: 16,
+                              color: Color(0xFF054D88),
                             ),
-                          ),
+                          ],
+                        ),
+                      ),
                         
                         // Edit mode buttons
                         if (_isEditMode)
