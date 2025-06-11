@@ -28,6 +28,23 @@ class _InmateDetailsPageState extends State<InmateDetailsPage> {
   final _inmateLastNameController = TextEditingController();
   final _relationshipController = TextEditingController();
   bool _isLoading = false;
+  String _selectedRelationship = '';
+  bool _showOtherRelationship = false;
+
+  final List<String> _relationshipOptions = [
+    'Spouse',
+    'Parent',
+    'Child',
+    'Sibling',
+    'Grandparent',
+    'Grandchild',
+    'Aunt/Uncle',
+    'Niece/Nephew',
+    'Cousin',
+    'Legal Counsel',
+    'Friend',
+    'Other'
+  ];
 
   Future<void> _proceedToVerification(BuildContext context) async {
     if (!_formKey.currentState!.validate()) return;
@@ -234,25 +251,92 @@ class _InmateDetailsPageState extends State<InmateDetailsPage> {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        TextFormField(
-                          controller: _relationshipController,
-                          decoration: InputDecoration(
-                            hintText: 'e.g. Family member, Friend, Legal counsel',
-                            fillColor: const Color(0xFFF5F7FA),
-                            filled: true,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                            prefixIcon: const Icon(Icons.people, color: Color(0xFF054D88)),
+                        Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF5F7FA),
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          validator: (value) {
-                            if (value == null || value.isEmpty) {
-                              return 'Please enter your relationship';
-                            }
-                            return null;
-                          },
+                          child: DropdownButtonFormField<String>(
+                            value: _selectedRelationship.isEmpty ? null : _selectedRelationship,
+                            decoration: InputDecoration(
+                              fillColor: const Color(0xFFF5F7FA),
+                              filled: true,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                              prefixIcon: const Icon(Icons.people, color: Color(0xFF054D88)),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                            ),
+                            hint: const Text(
+                              'Select relationship',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                color: Colors.grey,
+                              ),
+                            ),
+                            items: _relationshipOptions.map((String value) {
+                              return DropdownMenuItem<String>(
+                                value: value,
+                                child: Text(
+                                  value,
+                                  style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: Color(0xFF054D88),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (String? newValue) {
+                              setState(() {
+                                _selectedRelationship = newValue ?? '';
+                                _showOtherRelationship = newValue == 'Other';
+                                if (!_showOtherRelationship) {
+                                  _relationshipController.text = newValue ?? '';
+                                }
+                              });
+                            },
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please select a relationship';
+                              }
+                              return null;
+                            },
+                          ),
                         ),
+                        
+                        if (_showOtherRelationship) ...[
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Specify Relationship',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF054D88),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            controller: _relationshipController,
+                            decoration: InputDecoration(
+                              hintText: 'Enter your relationship to the inmate',
+                              fillColor: const Color(0xFFF5F7FA),
+                              filled: true,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                              prefixIcon: const Icon(Icons.edit, color: Color(0xFF054D88)),
+                            ),
+                            validator: (value) {
+                              if (_showOtherRelationship && (value == null || value.isEmpty)) {
+                                return 'Please specify your relationship';
+                              }
+                              return null;
+                            },
+                          ),
+                        ],
                       ],
                     ),
                   ),

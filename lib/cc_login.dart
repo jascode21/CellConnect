@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'cc_bottomnavbar.dart';
+import 'cc_signup.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -54,6 +55,21 @@ class _LoginPageState extends State<LoginPage> {
         String fullName = userData['fullName'] ?? '$firstName $lastName'.trim();
         
         if (fullName.isEmpty) fullName = 'User';
+
+        // Log login activity - ONLY for visitors
+        if (role.toLowerCase() == 'visitor') {
+          await FirebaseFirestore.instance.collection('activities').add({
+            'type': 'login',
+            'userId': userCredential.user!.uid,
+            'userName': fullName,
+            'userRole': role,
+            'timestamp': FieldValue.serverTimestamp(),
+            'deviceInfo': {
+              'platform': Theme.of(context).platform.toString(),
+              'isWeb': false,
+            }
+          });
+        }
 
         // Navigate to home with user data
         Navigator.pushReplacement(
@@ -428,7 +444,12 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                         TextButton(
                           onPressed: () {
-                            Navigator.pushNamed(context, '/signUp');
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const SignupPage(),
+                              ),
+                            );
                           },
                           style: TextButton.styleFrom(
                             foregroundColor: const Color(0xFF054D88),

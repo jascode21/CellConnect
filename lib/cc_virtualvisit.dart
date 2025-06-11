@@ -3,7 +3,6 @@ import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/services.dart';
-import 'cc_video_call.dart';
 
 class VirtualVisitPage extends StatefulWidget {
 const VirtualVisitPage({super.key});
@@ -72,16 +71,20 @@ Future<void> _checkForExistingVisit() async {
         .doc(user.uid)
         .collection('visits')
         .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(DateTime.now()))
-        .where('status', whereIn: ['pending', 'approved'])
-        .orderBy('date')
-        .limit(1)
         .get();
 
     if (!mounted) return; // Fix: Add mounted check after async operation
 
-    if (visitsSnapshot.docs.isNotEmpty) {
-      final visitData = visitsSnapshot.docs.first.data();
-      visitData['id'] = visitsSnapshot.docs.first.id;
+    // Filter the results in memory
+    final activeVisits = visitsSnapshot.docs.where((doc) {
+      final data = doc.data();
+      final status = data['status'] as String?;
+      return status == 'pending' || status == 'approved';
+    }).toList();
+
+    if (activeVisits.isNotEmpty) {
+      final visitData = activeVisits.first.data();
+      visitData['id'] = activeVisits.first.id;
 
       setState(() {
         _hasActiveVisit = true;
@@ -177,7 +180,7 @@ Future<void> _confirmSchedule() async {
             child: const Icon(Icons.videocam, color: Colors.blue),
           ),
           const SizedBox(width: 12),
-          const Text("Confirm Virtual Visit", style: TextStyle(fontFamily: 'Inter')),
+          const Text("Confirm Visit", style: TextStyle(fontFamily: 'Inter')),
         ],
       ),
       content: Column(
@@ -735,7 +738,7 @@ Widget build(BuildContext context) {
                               ),
                               SizedBox(height: 4),
                               Text(
-                                'Schedule a video call visit from any location with internet access',
+                                'Schedule your virtual visit.',
                                 style: TextStyle(
                                   fontFamily: 'Inter',
                                   fontSize: 14,
@@ -801,7 +804,7 @@ Widget build(BuildContext context) {
                                   Icon(Icons.videocam, color: Colors.blue),
                                   SizedBox(width: 8),
                                   Text(
-                                    'Select Platform',
+                                    'Select Facility',
                                     style: TextStyle(
                                       fontFamily: 'Inter',
                                       fontSize: 18,
@@ -834,21 +837,6 @@ Widget build(BuildContext context) {
                                           HapticFeedback.selectionClick();
                                         },
                                         contentPadding: EdgeInsets.zero,
-                                      ),
-                                      Padding(
-                                        padding: const EdgeInsets.only(left: 30, bottom: 8),
-                                        child: Text(
-                                          platform == 'Sta. Cruz Police Station 3' 
-                                              ? 'High-speed connection, HD video quality'
-                                              : platform == 'Gandara Police Community Precinct'
-                                                  ? 'Standard connection, regular video quality'
-                                                  : 'Fiber connection, excellent video quality',
-                                          style: const TextStyle(
-                                            fontFamily: 'Inter',
-                                            fontSize: 12,
-                                            color: Colors.grey,
-                                          ),
-                                        ),
                                       ),
                                     ],
                                   ),
@@ -1005,7 +993,7 @@ Widget build(BuildContext context) {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      'Select a date for your virtual visit. Weekend slots fill up quickly.',
+                                      'Select a schedule for your virtual visit.',
                                       style: TextStyle(
                                         fontFamily: 'Inter',
                                         fontSize: 12,
@@ -1207,7 +1195,7 @@ Widget build(BuildContext context) {
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 300),
                             width: double.infinity,
-                            height: 56,
+                            height: 60,
                             child: ElevatedButton(
                               onPressed: _isLoading || (selectedDate == null || selectedTime == null)
                                   ? null
@@ -1216,9 +1204,9 @@ Widget build(BuildContext context) {
                                 backgroundColor: Colors.blue,
                                 foregroundColor: Colors.white,
                                 padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 16),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                elevation: 3,
-                                shadowColor: Colors.blue.withAlpha(128),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                elevation: 4,
+                                shadowColor: Colors.blue.withOpacity(0.4),
                                 disabledBackgroundColor: Colors.grey.shade300,
                               ),
                               child: _isLoading
@@ -1240,12 +1228,21 @@ Widget build(BuildContext context) {
                                             fontSize: 18,
                                             color: Colors.white,
                                             fontWeight: FontWeight.bold,
+                                            letterSpacing: 0.5,
                                           ),
                                         ),
-                                        const SizedBox(width: 8),
-                                        Icon(
-                                          Icons.arrow_forward,
-                                          color: Colors.white.withAlpha(204),
+                                        const SizedBox(width: 12),
+                                        Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withOpacity(0.2),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: const Icon(
+                                            Icons.arrow_forward,
+                                            color: Colors.white,
+                                            size: 20,
+                                          ),
                                         ),
                                       ],
                                     ),
@@ -1461,18 +1458,31 @@ Widget build(BuildContext context) {
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: Colors.orange.withAlpha(77)),
                       ),
-                      child: const Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.info_outline, color: Colors.orange, size: 20),
-                          SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Make sure your camera and microphone are working properly before the visit.',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 14,
-                                color: Colors.orange,
+                          Row(
+                            children: [
+                              Icon(Icons.info_outline, color: Colors.orange, size: 16),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Quick Tips:',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.orange,
+                                ),
                               ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          const Text(
+                            '• Test camera and microphone\n• Find a quiet, well-lit space\n• Check your internet connection',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 11,
+                              color: Colors.orange,
                             ),
                           ),
                         ],
@@ -1487,30 +1497,29 @@ Widget build(BuildContext context) {
                         border: Border.all(color: Colors.blue.withAlpha(77)),
                       ),
                       child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Row(
+                          Row(
                             children: [
-                              Icon(Icons.computer, color: Colors.blue, size: 20),
-                              SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'Technical Requirements:',
-                                  style: TextStyle(
-                                    fontFamily: 'Inter',
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.blue,
-                                  ),
+                              Icon(Icons.computer, color: Colors.blue, size: 16),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Requirements:',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue,
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 4),
                           const Text(
-                            '• Stable internet connection (minimum 1 Mbps)\n• Working camera and microphone\n• Updated browser or our mobile app\n• Quiet environment with good lighting',
+                            '• Internet: 1 Mbps minimum\n• Camera & microphone\n• Updated browser/app\n• Quiet, well-lit space',
                             style: TextStyle(
                               fontFamily: 'Inter',
-                              fontSize: 12,
+                              fontSize: 11,
                               color: Colors.blue,
                             ),
                           ),
@@ -1520,146 +1529,10 @@ Widget build(BuildContext context) {
                   ],
                 ),
               ),
-              const SizedBox(height: 32),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.home, color: Colors.white),
-                label: const Text(
-                  'Back to Home',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'Inter',
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                onPressed: onBackToHome,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 4,
-                  shadowColor: Colors.blue.withAlpha(102),
-                ),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.video_call, color: Colors.white),
-                label: const Text(
-                  'Enter Virtual Room',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'Inter',
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                onPressed: () => _showVirtualRoomDialog(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green,
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  elevation: 4,
-                  shadowColor: Colors.green.withAlpha(102),
-                ),
-              ),
             ],
           ),
         ),
       ),
-    ),
-  );
-}
-
-void _showVirtualRoomDialog(BuildContext context) {
-  showDialog(
-    context: context,
-    builder: (context) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.blue.withAlpha(26),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.videocam, color: Colors.blue),
-          ),
-          const SizedBox(width: 12),
-          const Text('Virtual Visitation Room'),
-        ],
-      ),
-      content: const Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'You are about to enter the virtual visitation room. Please ensure your camera and microphone are working properly.',
-            style: TextStyle(fontSize: 14),
-          ),
-          SizedBox(height: 16),
-          Text(
-            'Note: This is a simulated experience. In a real application, you would be connected to a video call interface.',
-            style: TextStyle(fontSize: 12, color: Colors.grey),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        ElevatedButton.icon(
-          icon: const Icon(Icons.video_call, size: 16),
-          label: const Text('Enter Room'),
-          onPressed: () {
-            Navigator.pop(context);
-          
-            // Use the Agora App ID from your project
-            const String agoraAppId = '81bb421e4db9457f9522222420e2841c';
-            // Use the primary certificate
-            const String primaryCert = '522f820b685a44ba9cd040cab895e8c9';
-          
-            if (agoraAppId.isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Invalid Agora App ID. Please configure a valid App ID.'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-              return;
-            }
-          
-            try {
-              // Navigate to the video call screen
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => EnhancedVideoCallPage(
-                    appId: agoraAppId,
-                    channelName: visitationCode,
-                    userName: 'Visitor',
-                    role: 'Visitor',
-                    certificate: primaryCert,
-                  ),
-                ),
-              );
-            } catch (e) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Error starting video call: $e'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            }
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blue,
-            foregroundColor: Colors.white,
-          ),
-        ),
-      ],
     ),
   );
 }

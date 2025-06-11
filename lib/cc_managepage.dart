@@ -78,6 +78,17 @@ Future<void> _fetchAllVisits() async {
 
     for (final doc in visitsSnapshot.docs) {
       final data = doc.data();
+      
+      // Skip cancelled, rejected, and past visits
+      if (data['status'] == 'cancelled' || data['status'] == 'rejected') {
+        continue;
+      }
+
+      final visitDate = (data['date'] as Timestamp).toDate();
+      final visitTime = data['time'] as String;
+      if (_isVisitPassed(visitDate, visitTime)) {
+        continue;
+      }
 
       // Get visitor details
       String visitorName = data['visitorName'] ?? 'Unknown Visitor';
@@ -168,11 +179,13 @@ Future<void> _fetchScheduledVisits() async {
     final startOfDay = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
     final endOfDay = startOfDay.add(const Duration(days: 1));
 
-    // Filter visits for the selected date
+    // Filter visits for the selected date and exclude cancelled visits
     final filteredVisits = _allVisits.where((visit) {
       final visitDate = visit['date'] as DateTime;
+      final visitStatus = visit['status'] as String;
       return visitDate.isAfter(startOfDay.subtract(const Duration(seconds: 1))) && 
-             visitDate.isBefore(endOfDay);
+             visitDate.isBefore(endOfDay) &&
+             visitStatus != 'cancelled';
     }).toList();
 
     if (mounted) {
@@ -745,6 +758,7 @@ void _showVisitDetailsModal(Map<String, dynamic> visit) {
   final visitStatus = visit['status'] as String;
   final facility = visit['facility'] as String;
   final time = visit['time'] as String;
+  _isVisitPassed(visitDate, time);
   
   showModalBottomSheet(
     context: context,
@@ -794,8 +808,12 @@ void _showVisitDetailsModal(Map<String, dynamic> visit) {
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
-                    visitType.contains('Virtual') ? Icons.videocam : Icons.person,
-                    color: visitType.contains('Virtual') ? Colors.blue : const Color(0xFF054D88),
+                    visitType.contains('Virtual') 
+                        ? Icons.videocam 
+                        : Icons.person,
+                    color: visitType.contains('Virtual') 
+                        ? Colors.blue 
+                        : const Color(0xFF054D88),
                     size: 28,
                   ),
                 ),
@@ -810,7 +828,9 @@ void _showVisitDetailsModal(Map<String, dynamic> visit) {
                           fontFamily: 'Inter',
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
-                          color: visitType.contains('Virtual') ? Colors.blue : const Color(0xFF054D88),
+                          color: visitType.contains('Virtual') 
+                              ? Colors.blue 
+                              : const Color(0xFF054D88),
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -1084,6 +1104,14 @@ Widget build(BuildContext context) {
       actions: [
         IconButton(
           onPressed: () {
+            // Navigate to history screen
+            Navigator.pushNamed(context, '/history');
+          },
+          icon: const Icon(Icons.history, color: Colors.black, size: 28),
+          tooltip: 'View Visit History',
+        ),
+        IconButton(
+          onPressed: () {
             // Show date picker
             showDatePicker(
               context: context,
@@ -1111,79 +1139,94 @@ Widget build(BuildContext context) {
         // Calendar Row with "All" option
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                // "All" option
-                GestureDetector(
-                  onTap: () => _selectDay(-1),
-                  child: Column(
-                    children: [
-                      const Text(
-                        "All",
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 15,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      CircleAvatar(
-                        radius: 16,
-                        backgroundColor: _activeDay == -1
-                            ? const Color.fromARGB(255, 5, 77, 136)
-                            : Colors.transparent,
-                        child: Text(
-                          "•••",
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: _activeDay == -1 ? Colors.white : Colors.black,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
                 ),
-                const SizedBox(width: 16),
-                // Day options
-                ...List.generate(7, (index) {
-                  return GestureDetector(
-                    onTap: () => _selectDay(index),
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 16.0),
-                      child: Column(
+              ],
+            ),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+              child: Row(
+                children: [
+                  // "All" option
+                  GestureDetector(
+                    onTap: () => _selectDay(-1),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _activeDay == -1 ? const Color(0xFF054D88) : Colors.transparent,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
                         children: [
+                          Icon(
+                            Icons.calendar_month,
+                            color: _activeDay == -1 ? Colors.white : Colors.grey,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
                           Text(
-                            _weekDays[index],
-                            style: const TextStyle(
+                            "All",
+                            style: TextStyle(
                               fontFamily: 'Inter',
                               fontSize: 15,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          CircleAvatar(
-                            radius: 16,
-                            backgroundColor: index == _activeDay
-                                ? const Color.fromARGB(255, 5, 77, 136)
-                                : Colors.transparent,
-                            child: Text(
-                              _weekDates[index].toString(),
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                                color: index == _activeDay ? Colors.white : Colors.black,
-                              ),
+                              fontWeight: FontWeight.w600,
+                              color: _activeDay == -1 ? Colors.white : Colors.grey,
                             ),
                           ),
                         ],
                       ),
                     ),
-                  );
-                }),
-              ],
+                  ),
+                  const SizedBox(width: 8),
+                  // Day options
+                  ...List.generate(7, (index) {
+                    final isSelected = index == _activeDay;
+                    return GestureDetector(
+                      onTap: () => _selectDay(index),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        margin: const EdgeInsets.only(right: 8),
+                        decoration: BoxDecoration(
+                          color: isSelected ? const Color(0xFF054D88) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Column(
+                          children: [
+                            Text(
+                              _weekDays[index],
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                                color: isSelected ? Colors.white : Colors.grey,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              _weekDates[index].toString(),
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: isSelected ? Colors.white : Colors.black87,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                ],
+              ),
             ),
           ),
         ),
@@ -1192,18 +1235,39 @@ Widget build(BuildContext context) {
         // Scheduled Today Section
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: Text(
-            _activeDay == -1 
-                ? 'All Scheduled Visits' 
-                : _activeDay == 0 
-                    ? 'Scheduled Today' 
-                    : 'Scheduled on ${DateFormat('MMMM d').format(_selectedDate)}',
-            style: const TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 25,
-              fontWeight: FontWeight.bold,
-              color: Colors.black,
-            ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                _activeDay == -1 
+                    ? 'All Scheduled Visits' 
+                    : _activeDay == 0 
+                        ? 'Scheduled Today' 
+                        : 'Scheduled on ${DateFormat('MMMM d').format(_selectedDate)}',
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF054D88).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${_filteredVisits.length} visits',
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF054D88),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 16),
@@ -1211,22 +1275,43 @@ Widget build(BuildContext context) {
         // Search Bar
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
-          child: TextField(
-            controller: _searchController,
-            decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.search),
-              hintText: 'Search by visitor name, date, status...',
-              hintStyle: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 14,
-                color: Colors.grey.shade500,
-              ),
-              filled: true,
-              fillColor: Colors.white,
-              contentPadding: const EdgeInsets.symmetric(vertical: 12),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade300),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search, color: Color(0xFF054D88)),
+                hintText: 'Search by visitor name, date, status...',
+                hintStyle: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 14,
+                  color: Colors.grey.shade500,
+                ),
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade200),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.grey.shade200),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: Color(0xFF054D88)),
+                ),
               ),
             ),
           ),
@@ -1314,17 +1399,30 @@ Widget _buildVisitorCard({
   final formattedDate = _activeDay == -1 
       ? DateFormat('MMM d, yyyy').format(date) 
       : '';
+      
+  final bool isPassed = _isVisitPassed(date, time);
+  final String displayStatus = isPassed ? 'Passed' : _getStatusText(status);
+  final Color statusColor = isPassed ? Colors.grey : _getStatusColor(status);
 
-  return Card(
+  return Container(
     margin: const EdgeInsets.only(bottom: 16.0),
-    elevation: 2,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(16),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.05),
+          blurRadius: 10,
+          offset: const Offset(0, 2),
+        ),
+      ],
+    ),
     child: Padding(
       padding: const EdgeInsets.all(16.0),
       child: Row(
         children: [
           _buildProfileImage(imageUrl, imageBase64, name),
-          const SizedBox(width: 12),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1333,92 +1431,136 @@ Widget _buildVisitorCard({
                   name,
                   style: const TextStyle(
                     fontFamily: 'Inter',
-                    fontSize: 19,
+                    fontSize: 18,
                     fontWeight: FontWeight.bold,
                     color: Colors.black,
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
                 Row(
                   children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '$type - $time',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 15,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                          if (_activeDay == -1) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              formattedDate,
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                fontSize: 14,
-                                color: Colors.grey.shade500,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
+                    Icon(
+                      type.contains('Virtual') ? Icons.videocam : Icons.person,
+                      size: 16,
+                      color: type.contains('Virtual') ? Colors.blue : const Color(0xFF054D88),
                     ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: _getStatusColor(status).withAlpha(25),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        _getStatusText(status),
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: _getStatusColor(status),
-                        ),
+                    const SizedBox(width: 4),
+                    Text(
+                      type,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 14,
+                        color: type.contains('Virtual') ? Colors.blue : const Color(0xFF054D88),
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
                 ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.access_time,
+                      size: 16,
+                      color: Colors.grey.shade600,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      time,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 14,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+                if (_activeDay == -1) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.calendar_today,
+                        size: 16,
+                        color: Colors.grey.shade600,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        formattedDate,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 14,
+                          color: Colors.grey.shade600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
-          if (onApprove != null && onDecline != null) ...[
-            IconButton(
-              onPressed: onApprove,
-              icon: const Icon(Icons.check_circle, color: Color.fromARGB(255, 5, 77, 136), size: 40),
-            ),
-            IconButton(
-              onPressed: onDecline,
-              icon: const Icon(Icons.cancel, color: Color.fromARGB(255, 150, 62, 62), size: 40),
-            ),
-          ],
-          if ((onStart != null || status == 'in_progress') && type.contains('Virtual'))
-            ElevatedButton(
-              onPressed: onStart ?? (status == 'in_progress' ? () => _joinVirtualVisit(visit['id']) : null),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: status == 'in_progress' ? Colors.blue : const Color.fromARGB(255, 5, 77, 136),
-                shape: RoundedRectangleBorder(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withAlpha(25),
                   borderRadius: BorderRadius.circular(8),
                 ),
-              ),
-              child: Text(
-                status == 'in_progress' ? 'Join' : 'Start',
-                style: const TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 15,
-                  color: Colors.white,
+                child: Text(
+                  displayStatus,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: statusColor,
+                  ),
                 ),
               ),
-            ),
-          if (onApprove == null && onDecline == null && onStart == null)
-            const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+              const SizedBox(height: 8),
+              if (onApprove != null && onDecline != null && !isPassed) ...[
+                Row(
+                  children: [
+                    IconButton(
+                      onPressed: onApprove,
+                      icon: const Icon(Icons.check_circle, color: Colors.green, size: 32),
+                      tooltip: 'Approve',
+                    ),
+                    IconButton(
+                      onPressed: onDecline,
+                      icon: const Icon(Icons.cancel, color: Colors.red, size: 32),
+                      tooltip: 'Decline',
+                    ),
+                  ],
+                ),
+              ] else if ((onStart != null || status == 'in_progress') && type.contains('Virtual') && !isPassed) ...[
+                ElevatedButton.icon(
+                  onPressed: onStart ?? (status == 'in_progress' ? () => _joinVirtualVisit(visit['id']) : null),
+                  icon: Icon(
+                    status == 'in_progress' ? Icons.videocam : Icons.play_circle_fill,
+                    size: 20,
+                  ),
+                  label: Text(
+                    status == 'in_progress' ? 'Join' : 'Start',
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: status == 'in_progress' ? Colors.blue : const Color(0xFF054D88),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
         ],
       ),
     ),
@@ -1534,5 +1676,30 @@ String _getStatusText(String status) {
     default:
       return 'Pending';
   }
+}
+
+bool _isVisitPassed(DateTime visitDate, String visitTime) {
+  final now = DateTime.now();
+  final visitDateTime = _parseVisitDateTime(visitDate, visitTime);
+  return visitDateTime.isBefore(now);
+}
+
+DateTime _parseVisitDateTime(DateTime date, String time) {
+  // Parse time string (e.g., "9:00 AM - 10:00 AM")
+  final timeParts = time.split(' - ')[0].split(' ');
+  final timeComponents = timeParts[0].split(':');
+  int hour = int.parse(timeComponents[0]);
+  int minute = int.parse(timeComponents[1]);
+  
+  // Convert to 24-hour format if PM
+  if (timeParts[1] == 'PM' && hour != 12) {
+    hour += 12;
+  }
+  // Convert 12 AM to 0
+  if (timeParts[1] == 'AM' && hour == 12) {
+    hour = 0;
+  }
+  
+  return DateTime(date.year, date.month, date.day, hour, minute);
 }
 }

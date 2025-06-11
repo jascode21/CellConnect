@@ -7,6 +7,8 @@ import 'cc_dashboard.dart';
 import 'cc_managepage.dart';
 import 'cc_activitylog.dart';
 import 'cc_database.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class BottomNavBar extends StatefulWidget {
   final String role; // Role to determine navigation (Visitor or Staff)
@@ -24,6 +26,7 @@ class BottomNavBar extends StatefulWidget {
 
 class _BottomNavBarState extends State<BottomNavBar> {
   int _selectedIndex = 0;
+  int _unreadCount = 0;
 
   late List<Widget> _visitorPages; // Pages for Visitor
   late List<Widget> _staffPages;   // Pages for Staff
@@ -31,6 +34,8 @@ class _BottomNavBarState extends State<BottomNavBar> {
   @override
   void initState() {
     super.initState();
+    _loadUnreadCount();
+    _setupNotificationListener();
 
     // Define pages for Visitor
     _visitorPages = [
@@ -47,6 +52,43 @@ class _BottomNavBarState extends State<BottomNavBar> {
       const ActivityLog(),
       const DatabasePage(),
     ];
+  }
+
+  void _setupNotificationListener() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .collection('notifications')
+          .where('read', isEqualTo: false)
+          .snapshots()
+          .listen((snapshot) {
+        setState(() {
+          _unreadCount = snapshot.docs.length;
+        });
+      });
+    }
+  }
+
+  Future<void> _loadUnreadCount() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      try {
+        final snapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('notifications')
+            .where('read', isEqualTo: false)
+            .get();
+        
+        setState(() {
+          _unreadCount = snapshot.docs.length;
+        });
+      } catch (e) {
+        debugPrint('Error loading unread count: $e');
+      }
+    }
   }
 
   void _onItemTapped(int index) {
@@ -92,20 +134,49 @@ class _BottomNavBarState extends State<BottomNavBar> {
                   label: 'Database',
                 ),
               ]
-            : const [
-                BottomNavigationBarItem(
+            : [
+                const BottomNavigationBarItem(
                   icon: Icon(Icons.home),
                   label: 'Home',
                 ),
-                BottomNavigationBarItem(
+                const BottomNavigationBarItem(
                   icon: Icon(Icons.calendar_today),
                   label: 'Calendar',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.notifications),
+                  icon: Stack(
+                    children: [
+                      const Icon(Icons.notifications),
+                      if (_unreadCount > 0)
+                        Positioned(
+                          right: 0,
+                          top: 0,
+                          child: Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            constraints: const BoxConstraints(
+                              minWidth: 16,
+                              minHeight: 16,
+                            ),
+                            child: Text(
+                              _unreadCount.toString(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                   label: 'Notifications',
                 ),
-                BottomNavigationBarItem(
+                const BottomNavigationBarItem(
                   icon: Icon(Icons.person),
                   label: 'Profile',
                 ),

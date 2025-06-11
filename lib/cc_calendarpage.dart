@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'cc_video_call.dart';
+import 'cc_visitorhistory.dart';
 
 class CalendarEvent {
 final DateTime date;
@@ -110,11 +111,17 @@ Future<void> _loadEvents() async {
         .get();
 
     final events = <CalendarEvent>[];
+    final now = DateTime.now();
 
     for (var doc in visitsSnapshot.docs) {
       final data = doc.data();
-      data['id'] = doc.id; // Add document ID to the data
-      events.add(CalendarEvent.fromFirestore(data));
+      final visitDate = (data['date'] as Timestamp).toDate();
+      
+      // Only include upcoming visits
+      if (visitDate.isAfter(now)) {
+        data['id'] = doc.id; // Add document ID to the data
+        events.add(CalendarEvent.fromFirestore(data));
+      }
     }
 
     // Sort events by date
@@ -130,7 +137,7 @@ Future<void> _loadEvents() async {
     if (events.isNotEmpty && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('${events.length} visits loaded'),
+          content: Text('${events.length} upcoming visits loaded'),
           backgroundColor: Colors.green,
           duration: const Duration(seconds: 2),
         ),
@@ -228,7 +235,89 @@ void _showEventDetailsModal(CalendarEvent event) {
   
   // Generate a unique hero tag for this event
   final heroTag = 'calendar-event-${event.visitId}';
+
+  DateTime _parseVisitDateTime(DateTime date, String timeStr) {
+    try {
+      // Handle different time formats
+      if (timeStr.contains('AM') || timeStr.contains('PM')) {
+        // Format: "2:30 PM" or "2:30 AM"
+        final timeParts = timeStr.split(':');
+        int hour = int.parse(timeParts[0].trim());
+        final minutePart = timeParts[1].split(' ')[0].trim();
+        int minute = int.parse(minutePart);
+        
+        // Handle AM/PM
+        if (timeStr.toUpperCase().contains('PM') && hour != 12) {
+          hour += 12;
+        } else if (timeStr.toUpperCase().contains('AM') && hour == 12) {
+          hour = 0;
+        }
+        
+        return DateTime(date.year, date.month, date.day, hour, minute);
+      } else {
+        // Format: "14:30"
+        final timeParts = timeStr.split(':');
+        int hour = int.parse(timeParts[0].trim());
+        int minute = int.parse(timeParts[1].trim());
+        
+        return DateTime(date.year, date.month, date.day, hour, minute);
+      }
+    } catch (e) {
+      debugPrint('Error parsing time: $e');
+      // Return a default time if parsing fails
+      return DateTime(date.year, date.month, date.day, 0, 0);
+    }
+  }
   
+  // Calculate if visit has passed
+  bool isVisitPassed() {
+    final now = DateTime.now();
+    final visitDateTime = _parseVisitDateTime(event.date, event.time);
+    
+    // Add 1 hour buffer for virtual visits to allow for late joins
+    if (event.visitationType == 'virtual') {
+      return visitDateTime.add(const Duration(hours: 1)).isBefore(now);
+    }
+    
+    // For in-person visits, consider it passed after 30 minutes
+    return visitDateTime.add(const Duration(minutes: 30)).isBefore(now);
+  }
+
+  String getTimeRemaining() {
+    final now = DateTime.now();
+    final visitDateTime = _parseVisitDateTime(event.date, event.time);
+    final difference = visitDateTime.difference(now);
+    
+    if (difference.isNegative) {
+      return 'Passed';
+    }
+    
+    if (difference.inDays > 0) {
+      return '${difference.inDays}d ${difference.inHours.remainder(24)}h remaining';
+    } else if (difference.inHours > 0) {
+      return '${difference.inHours}h ${difference.inMinutes.remainder(60)}m remaining';
+    } else {
+      return '${difference.inMinutes}m remaining';
+    }
+  }
+
+  final bool isPassed = isVisitPassed();
+  final String timeRemaining = getTimeRemaining();
+
+  // Always show "Passed" status if the visit has passed
+  final String effectiveStatus = isPassed ? 'passed' : visitStatus;
+  final Color statusColor = isPassed 
+      ? Colors.grey 
+      : effectiveStatus == 'approved' 
+          ? Colors.green 
+          : effectiveStatus == 'rejected' 
+              ? Colors.red 
+              : effectiveStatus == 'cancelled'
+                  ? Colors.grey
+                  : effectiveStatus == 'in_progress'
+                      ? Colors.blue
+                      : Colors.orange;
+
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
@@ -323,27 +412,15 @@ void _showEventDetailsModal(CalendarEvent event) {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: visitStatus == 'approved'
-                              ? Colors.green.withAlpha((0.1 * 255).round())
-                              : visitStatus == 'rejected'
-                                  ? Colors.red.withAlpha((0.1 * 255).round())
-                                  : visitStatus == 'cancelled'
-                                      ? Colors.grey.withAlpha((0.1 * 255).round())
-                                      : visitStatus == 'in_progress'
-                                          ? Colors.blue.withAlpha((0.1 * 255).round())
-                                          : Colors.orange.withAlpha((0.1 * 255).round()),
+                          color: isPassed
+                              ? Colors.grey.withAlpha((0.1 * 255).round())
+                              : statusColor.withAlpha((0.1 * 255).round()),
                           borderRadius: BorderRadius.circular(8),
                           boxShadow: [
                             BoxShadow(
-                              color: (visitStatus == 'approved'
-                                  ? Colors.green
-                                  : visitStatus == 'rejected'
-                                      ? Colors.red
-                                      : visitStatus == 'cancelled'
-                                          ? Colors.grey
-                                          : visitStatus == 'in_progress'
-                                              ? Colors.blue
-                                              : Colors.orange).withAlpha((0.2 * 255).round()),
+                              color: (isPassed
+                                  ? Colors.grey
+                                  : statusColor).withAlpha((0.2 * 255).round()),
                               blurRadius: 4,
                               offset: const Offset(0, 2),
                             ),
@@ -353,50 +430,38 @@ void _showEventDetailsModal(CalendarEvent event) {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
-                              visitStatus == 'approved'
-                                  ? Icons.check_circle
-                                  : visitStatus == 'rejected'
-                                      ? Icons.cancel
-                                      : visitStatus == 'cancelled'
-                                          ? Icons.block
-                                          : visitStatus == 'in_progress'
-                                              ? Icons.play_circle_fill
-                                              : Icons.hourglass_empty,
+                              isPassed
+                                  ? Icons.history
+                                  : effectiveStatus == 'approved'
+                                      ? Icons.check_circle
+                                      : effectiveStatus == 'rejected'
+                                          ? Icons.cancel
+                                          : effectiveStatus == 'cancelled'
+                                              ? Icons.block
+                                              : effectiveStatus == 'in_progress'
+                                                  ? Icons.play_circle_fill
+                                                  : Icons.hourglass_empty,
                               size: 14,
-                              color: visitStatus == 'approved'
-                                  ? Colors.green
-                                  : visitStatus == 'rejected'
-                                      ? Colors.red
-                                      : visitStatus == 'cancelled'
-                                          ? Colors.grey
-                                          : visitStatus == 'in_progress'
-                                              ? Colors.blue
-                                              : Colors.orange,
+                              color: isPassed ? Colors.grey : statusColor,
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              visitStatus == 'approved'
-                                  ? 'Approved'
-                                  : visitStatus == 'rejected'
-                                      ? 'Rejected'
-                                      : visitStatus == 'cancelled'
-                                          ? 'Cancelled'
-                                          : visitStatus == 'in_progress'
-                                              ? 'In Progress'
-                                              : 'Pending Approval',
+                              isPassed
+                                  ? 'Passed'
+                                  : effectiveStatus == 'approved'
+                                      ? 'Approved'
+                                      : effectiveStatus == 'rejected'
+                                          ? 'Rejected'
+                                          : effectiveStatus == 'cancelled'
+                                              ? 'Cancelled'
+                                              : effectiveStatus == 'in_progress'
+                                                  ? 'In Progress'
+                                                  : 'Pending Approval',
                               style: TextStyle(
                                 fontFamily: 'Inter',
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
-                                color: visitStatus == 'approved'
-                                    ? Colors.green
-                                    : visitStatus == 'rejected'
-                                        ? Colors.red
-                                        : visitStatus == 'cancelled'
-                                            ? Colors.grey
-                                            : visitStatus == 'in_progress'
-                                                ? Colors.blue
-                                                : Colors.orange,
+                                color: isPassed ? Colors.grey : statusColor,
                               ),
                             ),
                           ],
@@ -414,7 +479,7 @@ void _showEventDetailsModal(CalendarEvent event) {
             ),
           ),
           
-          // Content with animation - FIXED: Removed the incorrect 'child:' keyword
+          // Content with animation
           Expanded(
             child: TweenAnimationBuilder<double>(
               tween: Tween<double>(begin: 0.0, end: 1.0),
@@ -434,13 +499,15 @@ void _showEventDetailsModal(CalendarEvent event) {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Date and time section
+                    // Date and time section with time remaining
                     _buildDetailSection(
                       'Date & Time',
                       Icons.calendar_today,
                       [
                         _buildDetailItem('Date', formattedDate),
                         _buildDetailItem('Time', event.time),
+                        if (!isPassed)
+                          _buildDetailItem('Time Remaining', timeRemaining),
                       ],
                       visitType == 'Virtual' ? Colors.blue : const Color(0xFF054D88),
                     ),
@@ -464,8 +531,8 @@ void _showEventDetailsModal(CalendarEvent event) {
                       'Status Information',
                       Icons.info_outline,
                       [
-                        _buildDetailItem('Status', visitStatus.toUpperCase()),
-                        if (visitStatus == 'pending')
+                        _buildDetailItem('Status', isPassed ? 'PASSED' : effectiveStatus.toUpperCase()),
+                        if (!isPassed && effectiveStatus == 'pending')
                           const Padding(
                             padding: EdgeInsets.only(top: 12),
                             child: Row(
@@ -485,7 +552,7 @@ void _showEventDetailsModal(CalendarEvent event) {
                               ],
                             ),
                           ),
-                        if (visitStatus == 'approved')
+                        if (!isPassed && effectiveStatus == 'approved')
                           const Padding(
                             padding: EdgeInsets.only(top: 12),
                             child: Row(
@@ -505,7 +572,7 @@ void _showEventDetailsModal(CalendarEvent event) {
                               ],
                             ),
                           ),
-                        if (visitStatus == 'cancelled')
+                        if (effectiveStatus == 'cancelled')
                           const Padding(
                             padding: EdgeInsets.only(top: 12),
                             child: Row(
@@ -525,7 +592,7 @@ void _showEventDetailsModal(CalendarEvent event) {
                               ],
                             ),
                           ),
-                        if (visitStatus == 'in_progress')
+                        if (!isPassed && effectiveStatus == 'in_progress')
                           const Padding(
                             padding: EdgeInsets.only(top: 12),
                             child: Row(
@@ -545,18 +612,32 @@ void _showEventDetailsModal(CalendarEvent event) {
                               ],
                             ),
                           ),
+                        if (isPassed)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 12),
+                            child: Row(
+                              children: [
+                                Icon(Icons.history, size: 16, color: Colors.grey),
+                                SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'This visit has already passed and cannot be joined.',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 14,
+                                      color: Colors.grey,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                       ],
-                      visitStatus == 'approved'
-                          ? Colors.green
-                          : visitStatus == 'rejected'
-                              ? Colors.red
-                              : visitStatus == 'cancelled'
-                                  ? Colors.grey
-                                  : Colors.orange,
+                      statusColor,
                     ),
                     
-                    // Only show action buttons for active visits
-                    if (visitStatus != 'cancelled' && visitStatus != 'rejected') ...[
+                    // Only show action buttons for active visits that haven't passed
+                    if (!isPassed && effectiveStatus != 'cancelled' && effectiveStatus != 'rejected') ...[
                       const SizedBox(height: 32),
                       
                       // Action buttons with animation
@@ -585,7 +666,7 @@ void _showEventDetailsModal(CalendarEvent event) {
                           padding: const EdgeInsets.all(16),
                           child: Row(
                             children: [
-                              if (visitType == 'Virtual' && visitStatus == 'approved') ...[
+                              if (visitType == 'Virtual' && effectiveStatus == 'approved') ...[
                                 Expanded(
                                   child: ElevatedButton.icon(
                                     icon: const Icon(Icons.video_call),
@@ -634,7 +715,7 @@ void _showEventDetailsModal(CalendarEvent event) {
                       ),
                     ],
                     // Add this for cancelled bookings
-                    if (visitStatus == 'cancelled') ...[
+                    if (effectiveStatus == 'cancelled') ...[
                       const SizedBox(height: 32),
                       SizedBox(
                         width: double.infinity,
@@ -999,9 +1080,24 @@ Widget build(BuildContext context) {
                     ],
                   ),
                 ),
-                IconButton(
-                  icon: const Icon(Icons.chevron_right, size: 28, color: Color(0xFF054D88)),
-                  onPressed: () => _changeMonth(1),
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.history, size: 24, color: Color(0xFF054D88)),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const VisitorHistoryPage(),
+                          ),
+                        );
+                      },
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.chevron_right, size: 28, color: Color(0xFF054D88)),
+                      onPressed: () => _changeMonth(1),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -1191,6 +1287,7 @@ Widget build(BuildContext context) {
                                           visitId: event.visitId,
                                           visitationType: event.visitationType,
                                           visitationCode: event.visitationCode,
+                                          date: event.date,
                                         ),
                                       ))
                                     else
@@ -1249,6 +1346,7 @@ Widget build(BuildContext context) {
                                           visitId: event.visitId,
                                           visitationType: event.visitationType,
                                           visitationCode: event.visitationCode,
+                                          date: event.date,
                                         ),
                                       ))
                                     else
@@ -1276,150 +1374,193 @@ Widget build(BuildContext context) {
         ],
       ),
     ),
-    floatingActionButton: FloatingActionButton.extended(
-      onPressed: () {
-        // Show a dialog to choose visit type
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF054D88).withAlpha((0.1 * 255).round()),
-                    shape: BoxShape.circle,
+    floatingActionButton: Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      child: FloatingActionButton(
+        onPressed: () {
+          // Show a dialog to choose visit type
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF054D88).withAlpha((0.1 * 255).round()),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.event_available, color: Color(0xFF054D88), size: 28),
                   ),
-                  child: const Icon(Icons.event_available, color: Color(0xFF054D88)),
-                ),
-                const SizedBox(width: 8),
-                const Text('Schedule a Visit'),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('What type of visit would you like to schedule?'),
-                const SizedBox(height: 16),
-                Container(
-                  height: 100,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
+                  const SizedBox(width: 12),
+                  const Text(
+                    'Schedule a Visit',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            Navigator.pop(context);
-                            Navigator.pushNamed(context, '/inPersonVisit');
-                          },
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF054D88).withAlpha((0.1 * 255).round()),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: const Color(0xFF054D88).withAlpha((0.3 * 255).round()),
-                              ),
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withAlpha((0.1 * 255).round()),
-                                        blurRadius: 4,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  child: const Icon(Icons.person, color: Color(0xFF054D88)),
-                                ),
-                                const SizedBox(height: 8),
-                                const Text(
-                                  'In-Person',
-                                  style: TextStyle(
-                                    fontFamily: 'Inter',
-                                    fontWeight: FontWeight.bold,
-                                    color: Color(0xFF054D88),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            Navigator.pop(context);
-                            Navigator.pushNamed(context, '/virtualVisit');
-                          },
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.blue.withAlpha((0.1 * 255).round()),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: Colors.blue.withAlpha((0.3 * 255).round()),
-                              ),
-                            ),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    shape: BoxShape.circle,
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withAlpha((0.1 * 255).round()),
-                                        blurRadius: 4,
-                                        offset: const Offset(0, 2),
-                                      ),
-                                    ],
-                                  ),
-                                  child: const Icon(Icons.videocam, color: Colors.blue),
-                                ),
-                                const SizedBox(height: 8),
-                                const Text(
-                                  'Virtual',
-                                  style: TextStyle(
-                                    fontFamily: 'Inter',
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.blue,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
+                ],
               ),
-            ],
-          ),
-        );
-      },
-      backgroundColor: const Color(0xFF054D88),
-      icon: const Icon(Icons.add),
-      label: const Text('Schedule Visit'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    'What type of visit would you like to schedule?',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Container(
+                    height: 120,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              Navigator.pop(context);
+                              Navigator.pushNamed(context, '/inPersonVisit');
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF054D88).withAlpha((0.1 * 255).round()),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: const Color(0xFF054D88).withAlpha((0.3 * 255).round()),
+                                  width: 2,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withAlpha((0.05 * 255).round()),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withAlpha((0.1 * 255).round()),
+                                          blurRadius: 6,
+                                          offset: const Offset(0, 3),
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Icon(Icons.person, color: Color(0xFF054D88), size: 32),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  const Text(
+                                    'In-Person',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Color(0xFF054D88),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: GestureDetector(
+                            onTap: () {
+                              Navigator.pop(context);
+                              Navigator.pushNamed(context, '/virtualVisit');
+                            },
+                            child: Container(
+                              margin: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.blue.withAlpha((0.1 * 255).round()),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Colors.blue.withAlpha((0.3 * 255).round()),
+                                  width: 2,
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withAlpha((0.05 * 255).round()),
+                                    blurRadius: 8,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      shape: BoxShape.circle,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withAlpha((0.1 * 255).round()),
+                                          blurRadius: 6,
+                                          offset: const Offset(0, 3),
+                                        ),
+                                      ],
+                                    ),
+                                    child: const Icon(Icons.videocam, color: Colors.blue, size: 32),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  const Text(
+                                    'Virtual',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 16,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+        backgroundColor: const Color(0xFF054D88),
+        elevation: 6,
+        child: const Icon(Icons.add, size: 32),
+      ),
     ),
   );
 }
@@ -1433,16 +1574,82 @@ final String? status;
 final String? visitId;
 final String? visitationType;
 final String? visitationCode;
+final DateTime date;
 
 const _EventItem({
   required this.time,
   required this.title,
+  required this.date,
   this.subtitle,
   this.status,
   this.visitId,
   this.visitationType,
   this.visitationCode,
 });
+
+bool _isVisitPassed() {
+  final now = DateTime.now();
+  final visitDateTime = _parseVisitDateTime(date, time);
+  
+  // Add 1 hour buffer for virtual visits to allow for late joins
+  if (visitationType == 'virtual') {
+    return visitDateTime.add(const Duration(hours: 1)).isBefore(now);
+  }
+  
+  // For in-person visits, consider it passed after 30 minutes
+  return visitDateTime.add(const Duration(minutes: 30)).isBefore(now);
+}
+
+DateTime _parseVisitDateTime(DateTime date, String timeStr) {
+  try {
+    // Handle different time formats
+    if (timeStr.contains('AM') || timeStr.contains('PM')) {
+      // Format: "2:30 PM" or "2:30 AM"
+      final timeParts = timeStr.split(':');
+      int hour = int.parse(timeParts[0].trim());
+      final minutePart = timeParts[1].split(' ')[0].trim();
+      int minute = int.parse(minutePart);
+      
+      // Handle AM/PM
+      if (timeStr.toUpperCase().contains('PM') && hour != 12) {
+        hour += 12;
+      } else if (timeStr.toUpperCase().contains('AM') && hour == 12) {
+        hour = 0;
+      }
+      
+      return DateTime(date.year, date.month, date.day, hour, minute);
+    } else {
+      // Format: "14:30"
+      final timeParts = timeStr.split(':');
+      int hour = int.parse(timeParts[0].trim());
+      int minute = int.parse(timeParts[1].trim());
+      
+      return DateTime(date.year, date.month, date.day, hour, minute);
+    }
+  } catch (e) {
+    debugPrint('Error parsing time: $e');
+    // Return a default time if parsing fails
+    return DateTime(date.year, date.month, date.day, 0, 0);
+  }
+}
+
+String _getTimeRemaining() {
+  final now = DateTime.now();
+  final visitDateTime = _parseVisitDateTime(date, time);
+  final difference = visitDateTime.difference(now);
+  
+  if (difference.isNegative) {
+    return 'Passed';
+  }
+  
+  if (difference.inDays > 0) {
+    return '${difference.inDays}d ${difference.inHours.remainder(24)}h remaining';
+  } else if (difference.inHours > 0) {
+    return '${difference.inHours}h ${difference.inMinutes.remainder(60)}m remaining';
+  } else {
+    return '${difference.inMinutes}m remaining';
+  }
+}
 
 @override
 Widget build(BuildContext context) {
@@ -1467,6 +1674,12 @@ Widget build(BuildContext context) {
                   : 'Pending';
   
   final bool isVirtualInProgress = visitationType == 'virtual' && status == 'in_progress';
+  final bool isPassed = _isVisitPassed();
+  final String timeRemaining = _getTimeRemaining();
+
+  // Always show "Passed" status if the visit has passed
+  final String effectiveStatusText = isPassed ? 'Passed' : statusText;
+  final Color effectiveStatusColor = isPassed ? Colors.grey : statusColor;
 
   return Container(
     margin: const EdgeInsets.only(bottom: 16),
@@ -1492,14 +1705,28 @@ Widget build(BuildContext context) {
             const SizedBox(width: 12),
             SizedBox(
               width: 80,
-              child: Text(
-                time,
-                style: const TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                  color: Colors.black54,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    time,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.black54,
+                    ),
+                  ),
+                  if (!isPassed)
+                    Text(
+                      timeRemaining,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 12,
+                        color: Colors.grey.shade600,
+                      ),
+                    ),
+                ],
               ),
             ),
             Expanded(
@@ -1529,37 +1756,38 @@ Widget build(BuildContext context) {
               ),
             ),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              margin: const EdgeInsets.only(left: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: statusColor.withAlpha((0.1 * 255).round()),
-                borderRadius: BorderRadius.circular(4),
+                color: effectiveStatusColor.withAlpha((0.1 * 255).round()),
+                borderRadius: BorderRadius.circular(8),
               ),
+              constraints: const BoxConstraints(minWidth: 70),
               child: Text(
-                statusText,
+                effectiveStatusText,
                 style: TextStyle(
                   fontFamily: 'Inter',
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color: statusColor,
+                  color: effectiveStatusColor,
                 ),
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],
         ),
         
-        // Add Join button for virtual visits that are in progress
-        if (isVirtualInProgress) ...[
+        // Add Join button for virtual visits that are in progress and not passed
+        if (isVirtualInProgress && !isPassed) ...[
           const SizedBox(height: 12),
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(
-              // Inside the _EventItem class, replace the code that uses VideoCallPage
               onPressed: () {
-                // Navigate to video call page
                 if (visitationCode != null && visitationCode!.isNotEmpty) {
                   debugPrint("Joining virtual visit from calendar with code: $visitationCode");
                   
-                  // Use a valid Agora App ID
                   const String agoraAppId = '81bb421e4db9457f9522222420e2841c';
                   
                   if (agoraAppId.isEmpty || agoraAppId.contains('Replace with your')) {
@@ -1578,8 +1806,8 @@ Widget build(BuildContext context) {
                       builder: (context) => EnhancedVideoCallPage(
                         appId: agoraAppId,
                         channelName: visitationCode!,
-                        userName: 'User', // Add a default username
-                        role: 'Visitor', // Add a default role
+                        userName: 'User',
+                        role: 'Visitor',
                       ),
                     ),
                   );

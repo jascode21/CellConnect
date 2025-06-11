@@ -1,9 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:csv/csv.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:open_file/open_file.dart';
 
 class DatabasePage extends StatefulWidget {
   const DatabasePage({super.key});
@@ -216,6 +219,8 @@ class _DatabasePageState extends State<DatabasePage> {
 
   Future<void> _exportToCSV() async {
     try {
+      setState(() => _isLoading = true);
+
       // Prepare CSV data
       final header = ['Name', 'Email', 'Role', 'Created At', 'Visit Count', 'Last Visit'];
       final rows = _filteredData.map((user) {
@@ -239,26 +244,441 @@ class _DatabasePageState extends State<DatabasePage> {
       // Add header
       rows.insert(0, header);
 
-      // Convert to CSV - would be used for download in a real app
-      const ListToCsvConverter().convert(rows);
+      // Convert to CSV
+      final csvData = const ListToCsvConverter().convert(rows);
 
-      // In a real app, this would download the CSV file
-      // For this example, we'll just show a success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('CSV file generated successfully'),
-          backgroundColor: Colors.green,
+      // Show preview modal
+      if (!mounted) return;
+      
+      final shouldProceed = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => Container(
+          height: MediaQuery.of(context).size.height * 0.85,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.only(
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
+            ),
+          ),
+          child: Column(
+            children: [
+              // Handle bar
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              
+              // Header
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: Colors.grey.shade200,
+                      width: 1,
+                    ),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF054D88).withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.preview,
+                        color: Color(0xFF054D88),
+                        size: 28,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'CSV Preview',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF054D88),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF054D88).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '${_filteredData.length} users',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF054D88),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      icon: const Icon(Icons.close),
+                      color: Colors.grey,
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Content
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'The following data will be exported:',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF054D88),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Headers
+                            Container(
+                              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF054D88).withOpacity(0.05),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    flex: 2,
+                                    child: Text(
+                                      'Name',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.grey.shade700,
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    flex: 2,
+                                    child: Text(
+                                      'Email',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.grey.shade700,
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      'Role',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.grey.shade700,
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      'Visits',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.grey.shade700,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            // Sample data (first 5 rows)
+                            ...rows.sublist(1, rows.length > 6 ? 6 : rows.length).map((row) => Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    flex: 2,
+                                    child: Text(
+                                      row[0].toString(),
+                                      style: const TextStyle(fontSize: 14),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    flex: 2,
+                                    child: Text(
+                                      row[1].toString(),
+                                      style: const TextStyle(fontSize: 14),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      row[2].toString(),
+                                      style: const TextStyle(fontSize: 14),
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: Text(
+                                      row[4].toString(),
+                                      style: const TextStyle(fontSize: 14),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )),
+                            if (rows.length > 6) ...[
+                              const SizedBox(height: 12),
+                              Container(
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                decoration: BoxDecoration(
+                                  border: Border(
+                                    top: BorderSide(color: Colors.grey.shade300),
+                                  ),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '... and ${rows.length - 6} more rows',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade600,
+                                      fontStyle: FontStyle.italic,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.blue.withOpacity(0.2)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.info_outline, color: Colors.blue),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'File Information',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'The CSV file will be saved to your Downloads folder with timestamp for easy identification.',
+                                    style: TextStyle(
+                                      color: Colors.grey.shade700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              
+              // Footer with actions
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, -5),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context, false),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      ),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    ElevatedButton.icon(
+                      onPressed: () => Navigator.pop(context, true),
+                      icon: const Icon(Icons.download),
+                      label: const Text('Download CSV'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF054D88),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       );
 
-      // Print the first few lines for debugging
-      //print('CSV Preview:');
-      //print(csv.split('\n').take(5).join('\n'));
-    } catch (e) {
-      // Error exporting to CSV: $e
+      if (shouldProceed != true) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      // Get downloads directory
+      final directory = await getDownloadsDirectory();
+      if (directory == null) {
+        throw Exception('Could not access downloads directory');
+      }
+
+      final String timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+      final String filePath = '${directory.path}/users_$timestamp.csv';
+
+      // Write to file
+      final File file = File(filePath);
+      await file.writeAsString(csvData);
+
+      if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error exporting to CSV: $e')),
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'CSV file saved to Downloads: ${file.path.split('/').last}',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          backgroundColor: Colors.green,
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'Open',
+              textColor: Colors.white,
+              onPressed: () async {
+                try {
+                  final result = await OpenFile.open(file.path);
+                  if (result.type != ResultType.done) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Row(
+                            children: [
+                              const Icon(Icons.error_outline, color: Colors.white),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Error opening file: ${result.message}',
+                                  style: const TextStyle(color: Colors.white),
+                                ),
+                              ),
+                            ],
+                          ),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Row(
+                          children: [
+                            const Icon(Icons.error_outline, color: Colors.white),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Error opening file: $e',
+                                style: const TextStyle(color: Colors.white),
+                              ),
+                            ),
+                          ],
+                        ),
+                        backgroundColor: Colors.red,
+        ),
       );
+                  }
+                }
+              },
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Error exporting to CSV: $e',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.red,
+          ),
+      );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -275,53 +695,80 @@ class _DatabasePageState extends State<DatabasePage> {
             fontFamily: 'Inter',
             fontSize: screenWidth * 0.08,
             fontWeight: FontWeight.bold,
-            color: Colors.black,
+            color: const Color(0xFF054D88),
           ),
         ),
+        elevation: 0,
+        backgroundColor: Colors.white,
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16.0),
             child: ElevatedButton.icon(
               onPressed: _exportToCSV,
-              icon: const Icon(Icons.download, size: 25, color: Colors.white),
+              icon: const Icon(Icons.download, size: 20, color: Colors.white),
               label: const Text(
-                'CSV',
+                'Export CSV',
                 style: TextStyle(
                   fontFamily: 'Inter',
-                  fontSize: 18,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
                   color: Colors.white,
                 ),
               ),
               style: ElevatedButton.styleFrom(
-                backgroundColor: const Color.fromARGB(255, 5, 77, 136),
+                backgroundColor: const Color(0xFF054D88),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(12),
                 ),
+                elevation: 2,
               ),
             ),
           ),
         ],
       ),
-      body: Column(
+      body: Container(
+        color: Colors.grey.shade50,
+        child: Column(
         children: [
           // Search bar
-          Padding(
-            padding: const EdgeInsets.all(16.0),
+            Container(
+              margin: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                  prefixIcon: const Icon(Icons.search, color: Color(0xFF054D88)),
                 hintText: 'Search by name, email, or role',
-                hintStyle: const TextStyle(
+                  hintStyle: TextStyle(
                   fontFamily: 'Inter',
-                  fontSize: 16,
-                  color: Color.fromARGB(255, 98, 98, 98),
+                    fontSize: 14,
+                    color: Colors.grey.shade500,
                 ),
                 filled: true,
-                fillColor: Colors.grey.shade100,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 16),
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide.none,
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: Colors.grey.shade200),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: BorderSide(color: Colors.grey.shade200),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: Color(0xFF054D88)),
                 ),
               ),
             ),
@@ -336,152 +783,195 @@ class _DatabasePageState extends State<DatabasePage> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(
+                              Container(
+                                padding: const EdgeInsets.all(24),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.05),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Icon(
                               Icons.search_off,
-                              size: 64,
+                                  size: 48,
                               color: Colors.grey.shade400,
                             ),
-                            const SizedBox(height: 16),
+                              ),
+                              const SizedBox(height: 24),
                             Text(
                               'No users found',
                               style: TextStyle(
                                 fontFamily: 'Inter',
-                                fontSize: 16,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w600,
                                 color: Colors.grey.shade600,
+                              ),
+                            ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Try adjusting your search',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 14,
+                                  color: Colors.grey.shade500,
                               ),
                             ),
                           ],
                         ),
                       )
-                    : SingleChildScrollView(
+                      : Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 10,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                          ),
+                          child: SingleChildScrollView(
                         scrollDirection: Axis.horizontal,
                         child: SingleChildScrollView(
                           child: DataTable(
-                            headingRowColor: WidgetStateProperty.all(
-                              const Color.fromARGB(255, 5, 77, 136).withAlpha(25),
+                                headingRowColor: MaterialStateProperty.all(
+                                  const Color(0xFF054D88).withOpacity(0.05),
                             ),
-                            dataRowMinHeight: 60,
-                            dataRowMaxHeight: 60,
+                                dataRowMinHeight: 72,
+                                dataRowMaxHeight: 72,
+                                horizontalMargin: 24,
+                                columnSpacing: 24,
                             columns: [
                               DataColumn(
-                                label: const Text('Name'),
+                                    label: const Text(
+                                      'Name',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF054D88),
+                                      ),
+                                    ),
                                 onSort: (_, __) => _changeSort('name'),
                               ),
                               DataColumn(
-                                label: const Text('Email'),
+                                    label: const Text(
+                                      'Email',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF054D88),
+                                      ),
+                                    ),
                                 onSort: (_, __) => _changeSort('email'),
                               ),
-                              DataColumn(
-                                label: const Text('Role'),
-                                onSort: (_, __) => _changeSort('role'),
+                                  const DataColumn(
+                                    label: Text(
+                                      'Profile',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF054D88),
                               ),
-                              DataColumn(
-                                label: const Text('Created At'),
-                                onSort: (_, __) => _changeSort('createdAt'),
-                              ),
-                              DataColumn(
-                                label: const Text('Visit Count'),
-                                numeric: true,
-                                onSort: (_, __) => _changeSort('visitCount'),
-                              ),
-                              DataColumn(
-                                label: const Text('Last Visit'),
-                                onSort: (_, __) => _changeSort('lastVisit'),
-                              ),
-                              DataColumn(
-                                label: const Text('Profile'),
+                                    ),
                               ),
                               const DataColumn(
-                                label: Text('Actions'),
+                                    label: Text(
+                                      'Actions',
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF054D88),
+                                      ),
+                                    ),
                               ),
                             ],
                             rows: _paginatedData.map((user) {
-                              final createdAt = user['createdAt'] as Timestamp?;
-                              final lastVisit = user['lastVisit'] as Timestamp?;
-
                               return DataRow(
+                                onSelectChanged: (selected) {
+                                  if (selected == true) {
+                                    Navigator.pushNamed(
+                                      context,
+                                      '/userDetails',
+                                      arguments: user['id'],
+                                    );
+                                  }
+                                },
                                 cells: [
-                                  DataCell(Text(user['name'])),
-                                  DataCell(Text(user['email'])),
                                   DataCell(
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: user['role'] == 'Staff'
-                                            ? const Color.fromARGB(255, 5, 77, 136).withAlpha(25)
-                                            : Colors.green.withAlpha(25),
-                                        borderRadius: BorderRadius.circular(4),
-                                      ),
-                                      child: Text(
-                                        user['role'],
-                                        style: TextStyle(
-                                          color: user['role'] == 'Staff'
-                                              ? const Color.fromARGB(255, 5, 77, 136)
-                                              : Colors.green,
-                                          fontWeight: FontWeight.bold,
+                                        Text(
+                                          user['name'],
+                                          style: const TextStyle(
+                                            fontFamily: 'Inter',
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w500,
+                                          ),
                                         ),
                                       ),
+                                      DataCell(
+                                        Text(
+                                          user['email'],
+                                          style: const TextStyle(
+                                            fontFamily: 'Inter',
+                                            fontSize: 14,
+                                      ),
                                     ),
-                                  ),
-                                  DataCell(
-                                    Text(createdAt != null
-                                        ? DateFormat('MMM d, yyyy')
-                                            .format(createdAt.toDate())
-                                        : 'N/A'),
-                                  ),
-                                  DataCell(
-                                    Text(user['visitCount'].toString()),
-                                  ),
-                                  DataCell(
-                                    Text(lastVisit != null
-                                        ? DateFormat('MMM d, yyyy')
-                                            .format(lastVisit.toDate())
-                                        : 'N/A'),
                                   ),
                                   DataCell(
                                     _buildProfileImageCell(user),
                                   ),
                                   DataCell(
-                                    Row(
-                                      children: [
-                                        IconButton(
-                                          icon: const Icon(Icons.visibility,
-                                              color: Color.fromARGB(255, 5, 77, 136)),
-                                          onPressed: () {
-                                            // View user details
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(
-                                                  content: Text(
-                                                      'Viewing details for ${user['name']}')),
-                                            );
-                                          },
-                                          tooltip: 'View Details',
+                                  Row(
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.edit,
+                                          color: Colors.orange,
+                                          size: 22,
                                         ),
-                                        IconButton(
-                                          icon: const Icon(Icons.edit, color: Colors.orange),
-                                          onPressed: () {
-                                            // Edit user
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(
-                                                  content: Text('Editing ${user['name']}')),
-                                            );
-                                          },
-                                          tooltip: 'Edit User',
-                                        ),
-                                      ],
-                                    ),
+                                        onPressed: () {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: Text('Editing ${user['name']}'),
+                                              backgroundColor: Colors.orange,
+                                            ),
+                                          );
+                                        },
+                                        tooltip: 'Edit User',
+                                      ),
+                                    ],
                                   ),
+                                ),
                                 ],
                               );
                             }).toList(),
+                              ),
                           ),
                         ),
                       ),
           ),
 
           // Pagination
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
+            Container(
+              margin: const EdgeInsets.all(16),
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -489,8 +979,11 @@ class _DatabasePageState extends State<DatabasePage> {
                   onPressed: _currentPage > 1
                       ? () => _changePage(_currentPage - 1)
                       : null,
-                  icon: const Icon(Icons.arrow_back_ios,
-                      size: 20, color: Colors.black),
+                    icon: Icon(
+                      Icons.arrow_back_ios,
+                      size: 18,
+                      color: _currentPage > 1 ? const Color(0xFF054D88) : Colors.grey.shade400,
+                    ),
                 ),
                 ...List.generate(
                   _totalPages > 5 ? 5 : _totalPages,
@@ -513,24 +1006,30 @@ class _DatabasePageState extends State<DatabasePage> {
                       child: InkWell(
                         onTap: () => _changePage(pageNumber),
                         child: Container(
-                          width: 32,
-                          height: 32,
+                            width: 36,
+                            height: 36,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: pageNumber == _currentPage
-                                ? const Color.fromARGB(255, 5, 77, 136)
+                                  ? const Color(0xFF054D88)
                                 : Colors.transparent,
+                              border: pageNumber == _currentPage
+                                  ? null
+                                  : Border.all(
+                                      color: Colors.grey.shade300,
+                                      width: 1,
+                                    ),
                           ),
                           child: Center(
                             child: Text(
                               pageNumber.toString(),
                               style: TextStyle(
                                 fontFamily: 'Inter',
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
                                 color: pageNumber == _currentPage
                                     ? Colors.white
-                                    : Colors.black,
+                                      : const Color(0xFF054D88),
                               ),
                             ),
                           ),
@@ -543,13 +1042,17 @@ class _DatabasePageState extends State<DatabasePage> {
                   onPressed: _currentPage < _totalPages
                       ? () => _changePage(_currentPage + 1)
                       : null,
-                  icon: const Icon(Icons.arrow_forward_ios,
-                      size: 20, color: Colors.black),
+                    icon: Icon(
+                      Icons.arrow_forward_ios,
+                      size: 18,
+                      color: _currentPage < _totalPages ? const Color(0xFF054D88) : Colors.grey.shade400,
+                    ),
                 ),
               ],
             ),
           ),
         ],
+        ),
       ),
     );
   }

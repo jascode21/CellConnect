@@ -15,6 +15,8 @@ import 'cc_notifipage.dart';
 import 'cc_calendarpage.dart';
 import 'cc_userprofile.dart';
 import 'cc_dashboard.dart';
+import 'cc_userdetails.dart';
+import 'cc_historypage.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -46,15 +48,15 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         fontFamily: 'Inter',
       ),
-      home: AuthCheck(), // Use AuthCheck as the home
+      home: AuthCheck(),
       routes: {
         '/signUp': (context) => const SignupPage(),
         '/verifyEmail': (context) => VerifyEmailPage(
               email: ModalRoute.of(context)?.settings.arguments as String? ?? '',
-              verificationCode: '', // Code will be passed when navigating
-              role: '', // Role will be passed when navigating
-              firstName: '', // First name will be passed when navigating
-              lastName: '', // Last name will be passed when navigating
+              verificationCode: '',
+              role: '',
+              firstName: '',
+              lastName: '',
             ),
         '/inmateDetails': (context) {
           final arguments = ModalRoute.of(context)?.settings.arguments as Map<String, String>? ?? {};
@@ -85,6 +87,11 @@ class MyApp extends StatelessWidget {
         '/userProfile': (context) => const UserProfilePage(),
         '/staffPage': (context) => const BottomNavBar(role: 'Staff', userName: ''),
         '/dashBoard': (context) => const DashboardPage(),
+        '/userDetails': (context) {
+          final userId = ModalRoute.of(context)?.settings.arguments as String? ?? '';
+          return UserDetailsPage(userId: userId);
+        },
+        '/history': (context) => const HistoryPage(),
       },
     );
   }
@@ -139,7 +146,6 @@ class _AuthCheckState extends State<AuthCheck> {
               _isLoading = false;
             });
 
-            // Navigate to home with user data
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(

@@ -23,6 +23,8 @@ class _SignupPageState extends State<SignupPage> {
   final _confirmPasswordController = TextEditingController();
   String? selectedRole;
   bool _isLoading = false;
+  bool _isPasswordVisible = false;
+  bool _isConfirmPasswordVisible = false;
 
   Future<void> _signUp(BuildContext context) async {
     // Validate form
@@ -429,11 +431,18 @@ class _SignupPageState extends State<SignupPage> {
                               ),
                               prefixIcon: const Icon(Icons.lock, color: Color(0xFF054D88)),
                               suffixIcon: IconButton(
-                                icon: const Icon(Icons.visibility_off, color: Colors.grey),
-                                onPressed: () {},
+                                icon: Icon(
+                                  _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                                  color: Colors.grey,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _isPasswordVisible = !_isPasswordVisible;
+                                  });
+                                },
                               ),
                             ),
-                            obscureText: true,
+                            obscureText: !_isPasswordVisible,
                             validator: (value) {
                               if (value == null || value.isEmpty) {
                                 return 'Please enter a password';
@@ -470,11 +479,18 @@ class _SignupPageState extends State<SignupPage> {
                               ),
                               prefixIcon: const Icon(Icons.lock_outline, color: Color(0xFF054D88)),
                               suffixIcon: IconButton(
-                                icon: const Icon(Icons.visibility_off, color: Colors.grey),
-                                onPressed: () {},
+                                icon: Icon(
+                                  _isConfirmPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                                  color: Colors.grey,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _isConfirmPasswordVisible = !_isConfirmPasswordVisible;
+                                  });
+                                },
                               ),
                             ),
-                            obscureText: true,
+                            obscureText: !_isConfirmPasswordVisible,
                             validator: (value) {
                               if (value == null || value.isEmpty) {
                                 return 'Please confirm your password';

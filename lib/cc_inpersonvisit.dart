@@ -71,14 +71,20 @@ class _InPersonVisitPageState extends State<InPersonVisitPage> with SingleTicker
           .doc(user.uid)
           .collection('visits')
           .where('date', isGreaterThanOrEqualTo: Timestamp.fromDate(DateTime.now()))
-          .where('status', whereIn: ['pending', 'approved'])
-          .orderBy('date')
-          .limit(1)
           .get();
       
-      if (visitsSnapshot.docs.isNotEmpty) {
-        final visitData = visitsSnapshot.docs.first.data();
-        visitData['id'] = visitsSnapshot.docs.first.id;
+      if (!mounted) return;
+
+      // Filter the results in memory
+      final activeVisits = visitsSnapshot.docs.where((doc) {
+        final data = doc.data();
+        final status = data['status'] as String?;
+        return status == 'pending' || status == 'approved';
+      }).toList();
+
+      if (activeVisits.isNotEmpty) {
+        final visitData = activeVisits.first.data();
+        visitData['id'] = activeVisits.first.id;
         
         setState(() {
           _hasActiveVisit = true;
@@ -94,7 +100,10 @@ class _InPersonVisitPageState extends State<InPersonVisitPage> with SingleTicker
       
       _animationController.forward();
     } catch (e) {
-      print('Error checking for existing visit: $e');
+      debugPrint('Error checking for existing visit: $e');
+      
+      if (!mounted) return;
+      
       setState(() {
         _isCheckingExistingVisit = false;
         _hasActiveVisit = false;
@@ -170,7 +179,7 @@ class _InPersonVisitPageState extends State<InPersonVisitPage> with SingleTicker
               child: const Icon(Icons.event_available, color: Color(0xFF054D88)),
             ),
             const SizedBox(width: 12),
-            const Text("Confirm Visit Details", style: TextStyle(fontFamily: 'Inter')),
+            const Text("Confirm Details", style: TextStyle(fontFamily: 'Inter')),
           ],
         ),
         content: Column(
@@ -661,7 +670,7 @@ class _InPersonVisitPageState extends State<InPersonVisitPage> with SingleTicker
                                 ),
                                 SizedBox(height: 4),
                                 Text(
-                                  'Schedule a face-to-face visit with an inmate at your selected facility',
+                                  'Schedule your in person visit',
                                   style: TextStyle(
                                     fontFamily: 'Inter',
                                     fontSize: 14,
@@ -760,21 +769,6 @@ class _InPersonVisitPageState extends State<InPersonVisitPage> with SingleTicker
                                             HapticFeedback.selectionClick();
                                           },
                                           contentPadding: EdgeInsets.zero,
-                                        ),
-                                        Padding(
-                                          padding: const EdgeInsets.only(left: 30, bottom: 8),
-                                          child: Text(
-                                            facility == 'Sta. Cruz Police Station 3' 
-                                                ? 'Available daily, 8AM-6PM'
-                                                : facility == 'Gandara Police Community Precinct'
-                                                    ? 'Available weekdays, 9AM-5PM'
-                                                    : 'Available all days, 8AM-7PM',
-                                            style: const TextStyle(
-                                              fontFamily: 'Inter',
-                                              fontSize: 12,
-                                              color: Colors.grey,
-                                            ),
-                                          ),
                                         ),
                                       ],
                                     ),
@@ -1091,7 +1085,7 @@ class _InPersonVisitPageState extends State<InPersonVisitPage> with SingleTicker
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 300),
                               width: double.infinity,
-                              height: 56,
+                              height: 60,
                               child: ElevatedButton(
                                 onPressed: _isLoading || (selectedDate == null || selectedTime == null) 
                                     ? null 
@@ -1100,9 +1094,9 @@ class _InPersonVisitPageState extends State<InPersonVisitPage> with SingleTicker
                                   backgroundColor: const Color(0xFF054D88),
                                   foregroundColor: Colors.white,
                                   padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 16),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  elevation: 3,
-                                  shadowColor: const Color(0xFF054D88).withOpacity(0.5),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  elevation: 4,
+                                  shadowColor: const Color(0xFF054D88).withOpacity(0.4),
                                   disabledBackgroundColor: Colors.grey.shade300,
                                 ),
                                 child: _isLoading
@@ -1118,18 +1112,27 @@ class _InPersonVisitPageState extends State<InPersonVisitPage> with SingleTicker
                                         mainAxisAlignment: MainAxisAlignment.center,
                                         children: [
                                           const Text(
-                                            'Schedule Visit', 
+                                            'Schedule Visit',
                                             style: TextStyle(
-                                              fontFamily: 'Inter', 
-                                              fontSize: 18, 
+                                              fontFamily: 'Inter',
+                                              fontSize: 18,
                                               color: Colors.white,
                                               fontWeight: FontWeight.bold,
+                                              letterSpacing: 0.5,
                                             ),
                                           ),
-                                          const SizedBox(width: 8),
-                                          Icon(
-                                            Icons.arrow_forward,
-                                            color: Colors.white.withOpacity(0.8),
+                                          const SizedBox(width: 12),
+                                          Container(
+                                            padding: const EdgeInsets.all(8),
+                                            decoration: BoxDecoration(
+                                              color: Colors.white.withOpacity(0.2),
+                                              borderRadius: BorderRadius.circular(12),
+                                            ),
+                                            child: const Icon(
+                                              Icons.arrow_forward,
+                                              color: Colors.white,
+                                              size: 20,
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -1316,28 +1319,6 @@ class VisitScheduledScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: 32),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.home, color: Colors.white),
-                  label: const Text(
-                    'Back to Home',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontFamily: 'Inter',
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  onPressed: onBackToHome,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF054D88),
-                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 4,
-                    shadowColor: const Color(0xFF054D88).withOpacity(0.4),
-                  ),
-                ),
               ],
             ),
           ),
@@ -1369,3 +1350,4 @@ class VisitScheduledScreen extends StatelessWidget {
     ),
   );
 }
+

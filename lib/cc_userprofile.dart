@@ -19,6 +19,7 @@ class UserProfilePage extends StatefulWidget {
 class _UserProfilePageState extends State<UserProfilePage> with SingleTickerProviderStateMixin {
   bool _isLoading = true;
   bool _isUploading = false;
+  bool _isChangingPassword = false; // New state for password change
   Map<String, dynamic>? _userData;
   Map<String, dynamic>? _inmateData;
   String? _profileImageUrl;
@@ -499,6 +500,47 @@ class _UserProfilePageState extends State<UserProfilePage> with SingleTickerProv
         ),
       );
       
+      // Log logout activity - ONLY for visitors
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        try {
+          // Get user data for the activity log
+          final userDoc = await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .get();
+          
+          String userName = 'Unknown User';
+          String userRole = 'Visitor';
+          
+          if (userDoc.exists) {
+            final userData = userDoc.data() as Map<String, dynamic>;
+            final firstName = userData['firstName'] ?? '';
+            final lastName = userData['lastName'] ?? '';
+            userName = userData['fullName'] ?? '$firstName $lastName'.trim();
+            userRole = userData['role'] ?? 'Visitor';
+            if (userName.isEmpty) userName = 'User';
+          }
+          
+          // ONLY log logout activity for visitors
+          if (userRole.toLowerCase() == 'visitor') {
+            await FirebaseFirestore.instance.collection('activities').add({
+              'type': 'logout',
+              'userId': user.uid,
+              'userName': userName,
+              'userRole': userRole,
+              'timestamp': FieldValue.serverTimestamp(),
+              'deviceInfo': {
+                'platform': Theme.of(context).platform.toString(),
+                'isWeb': false,
+              }
+            });
+          }
+        } catch (e) {
+          print('Error logging logout activity: $e');
+        }
+      }
+      
       await FirebaseAuth.instance.signOut();
       
       if (!mounted) return;
@@ -695,7 +737,6 @@ class _UserProfilePageState extends State<UserProfilePage> with SingleTickerProv
                       prefixIcon: const Icon(Icons.lock_clock),
                       suffixIcon: IconButton(
                         icon: Icon(
-                          // ignore: dead_code
                           obscureConfirmPassword ? Icons.visibility_off : Icons.visibility,
                         ),
                         onPressed: () {
@@ -803,6 +844,7 @@ class _UserProfilePageState extends State<UserProfilePage> with SingleTickerProv
                                   
                                   setState(() {
                                     isChangingPassword = true;
+                                    this._isChangingPassword = true; // Update parent state
                                   });
                                   
                                   try {
@@ -829,10 +871,6 @@ class _UserProfilePageState extends State<UserProfilePage> with SingleTickerProv
                                       ),
                                     );
                                   } catch (e) {
-                                    setState(() {
-                                      isChangingPassword = false;
-                                    });
-                                    
                                     String errorMessage = 'Error changing password';
                                     if (e is FirebaseAuthException) {
                                       if (e.code == 'wrong-password') {
@@ -848,6 +886,11 @@ class _UserProfilePageState extends State<UserProfilePage> with SingleTickerProv
                                         backgroundColor: Colors.red,
                                       ),
                                     );
+                                  } finally {
+                                    setState(() {
+                                      isChangingPassword = false;
+                                      this._isChangingPassword = false; // Reset parent state
+                                    });
                                   }
                                 },
                           style: ElevatedButton.styleFrom(
@@ -1150,7 +1193,7 @@ class _UserProfilePageState extends State<UserProfilePage> with SingleTickerProv
                         Hero(
                           tag: 'profileImage',
                           child: GestureDetector(
-                            onTap: null, // Disable tap to prevent bottom sheet
+                            onTap: _pickAndUploadImage,
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 300),
                               width: 120,
@@ -1207,7 +1250,7 @@ class _UserProfilePageState extends State<UserProfilePage> with SingleTickerProv
                                         ),
                                       ),
                                     ),
-                                  // Camera icon overlay - now visible but non-interactive due to onTap: null
+                                  // Camera icon overlay
                                   Positioned(
                                     bottom: 0,
                                     right: 0,
@@ -1239,54 +1282,58 @@ class _UserProfilePageState extends State<UserProfilePage> with SingleTickerProv
                         const SizedBox(height: 16),
                         
                         // User's Name with edit functionality
-                       if (_isEditMode)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 40),
-                        child: TextField(
-                          controller: _nameController,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF054D88),
-                          ),
-                          decoration: InputDecoration(
-                            hintText: 'Enter your name',
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 12,
-                            ),
-                          ),
-                        ),
-                      )
-                    else
-                      GestureDetector(
-                        onTap: null, // Disable tap to prevent entering edit mode
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              fullName.isNotEmpty ? fullName : 'User',
+                        if (_isEditMode)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 40),
+                            child: TextField(
+                              controller: _nameController,
+                              textAlign: TextAlign.center,
                               style: const TextStyle(
                                 fontFamily: 'Inter',
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
                                 color: Color(0xFF054D88),
                               ),
+                              decoration: InputDecoration(
+                                hintText: 'Enter your name',
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 12,
+                                ),
+                              ),
                             ),
-                            const SizedBox(width: 8),
-                            const Icon(
-                              Icons.edit,
-                              size: 16,
-                              color: Color(0xFF054D88),
+                          )
+                        else
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                _isEditMode = true;
+                              });
+                            },
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  fullName.isNotEmpty ? fullName : 'User',
+                                  style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF054D88),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                const Icon(
+                                  Icons.edit,
+                                  size: 16,
+                                  color: Color(0xFF054D88),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                      ),
+                          ),
                         
                         // Edit mode buttons
                         if (_isEditMode)
@@ -1431,6 +1478,7 @@ class _UserProfilePageState extends State<UserProfilePage> with SingleTickerProv
                                 icon: Icons.lock,
                                 value: '***************',
                                 isPassword: true,
+                                isLoading: _isChangingPassword, // Pass loading state
                                 onTap: _showChangePasswordDialog,
                               ),
                             ],
@@ -1504,9 +1552,6 @@ class _UserProfilePageState extends State<UserProfilePage> with SingleTickerProv
                             ],
                           ),
                         ),
-                        
-                        // App Settings Card
-                        
                         
                         // Help & Support
                         const SizedBox(height: 32),
@@ -1627,6 +1672,7 @@ class ProfileField extends StatelessWidget {
   final IconData icon;
   final String value;
   final bool isPassword;
+  final bool isLoading; // New property for loading state
   final VoidCallback? onTap;
 
   const ProfileField({
@@ -1635,6 +1681,7 @@ class ProfileField extends StatelessWidget {
     required this.icon,
     required this.value,
     this.isPassword = false,
+    this.isLoading = false,
     this.onTap,
   });
 
@@ -1656,7 +1703,7 @@ class ProfileField extends StatelessWidget {
         Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: onTap,
+            onTap: isLoading ? null : onTap, // Disable tap when loading
             borderRadius: BorderRadius.circular(12),
             child: Ink(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -1685,19 +1732,28 @@ class ProfileField extends StatelessWidget {
                     ),
                   ),
                   if (isPassword)
-                    TextButton.icon(
-                      onPressed: onTap,
-                      icon: const Icon(
-                        Icons.edit,
-                        size: 16,
-                      ),
-                      label: const Text('Change'),
-                      style: TextButton.styleFrom(
-                        foregroundColor: const Color(0xFF054D88),
-                        padding: EdgeInsets.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                    )
+                    isLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: Color(0xFF054D88),
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : TextButton.icon(
+                            onPressed: onTap,
+                            icon: const Icon(
+                              Icons.edit,
+                              size: 16,
+                            ),
+                            label: const Text('Change'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: const Color(0xFF054D88),
+                              padding: EdgeInsets.zero,
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                          )
                   else if (onTap != null)
                     const Icon(
                       Icons.content_copy,
